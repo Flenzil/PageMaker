@@ -65,6 +65,7 @@ class Page:
 CARD_WIDTH = 3264
 IMAGE_PATH = "./images/"
 PAGE_PATH = "./pages/"
+XML_PATH = "./xml/"
 
 
 def main():
@@ -78,7 +79,7 @@ def clear_pages_folder():
 
 def get_card_info():
     card_backs = []    
-    with open("cards.xml") as f:
+    with open(XML_PATH + "cards.xml") as f:
         back_info = ET.parse(f).getroot().find("backs")
         if back_info is not None:
             card_backs.append(back_info)
@@ -92,7 +93,7 @@ def create_pages():
 
     page_count = 0
 
-    with open("cards.xml") as f:
+    with open(XML_PATH + "cards.xml") as f:
         root = ET.parse(f).getroot()
         cards = root.find("fronts")
         backs = root.find("backs")
