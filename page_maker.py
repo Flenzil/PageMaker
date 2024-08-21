@@ -129,6 +129,15 @@ def get_card_back(card, backs):
         if card_slot is not None and back_slot is not None:
             if card_slot.text == back_slot.text:
                 return back
+    
+    if p.add_magic_backs:
+        with open(XML_PATH + "cards.xml") as f:
+            root = ET.parse(f).getroot()
+            card_back = root.find("cardback")
+            if card_back is not None:
+                return card_back.text
+            else:
+                raise Exception("Card back not found.")
 
 
 def save_pages(page, back, name):
@@ -173,7 +182,15 @@ def find_card_image(card):
     for card_image in os.listdir(IMAGE_PATH):
         if "Zone.Identifier" in card_image:
             continue
-        if card.find("id").text in card_image:
+        try:
+            card_id = card.find("id").text
+        except AttributeError:
+            if p.add_magic_backs:
+                card_id = card
+            else:
+                raise Exception(f"Card back not found for {card.find('query').text} and generic backs is not enabled")
+
+        if card_id in card_image:
             return IMAGE_PATH + card_image
 
 

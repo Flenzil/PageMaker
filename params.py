@@ -1,5 +1,8 @@
-# Page and card dimensions
-spacing = 5
+# Spacing between cards in pixels
+spacing = 5 
+
+# Add the generic magic back to each card
+add_magic_backs = False
 
 # CONSTANTS DO NOT CHANGE
 card_ratio = 1.396

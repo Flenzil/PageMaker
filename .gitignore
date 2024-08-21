@@ -2,4 +2,6 @@ venv/
 __pycache__/
 images_test/
 pages_test/
+pages/
+images/
 *.xml
