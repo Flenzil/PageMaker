@@ -4,12 +4,21 @@ spacing = 5
 # Add the generic magic back to each card
 add_magic_backs = False
 
-# CONSTANTS DO NOT CHANGE
-card_ratio = 1.396
-page_ratio = 1.414
-card_to_page_width_ratio = 3.297
+# A4 pages can only hold 3x3 magic cards
 columns = 3
 rows = 3
-margin_w_ratio = 0.045
-margin_top_ratio = 0.071
-margin_bottom_ratio = 0.029
+
+# Dimension Ratios
+card_ratio = 1.4265
+page_ratio = 1.4142135623730 # sqrt(2)
+card_to_page_width_ratio = 3.37
+margin_w_ratio = 0.04596
+margin_w_ratio_with_bleed = 0.01732
+margin_top_ratio = 0.05
+card_bleed_ratio_w = 0.095
+card_bleed_ratio_h = 0.0554
+
+border_crop_w = 0.0443
+border_crop_h = 0.02
+card_width_adjust = 62
+
