@@ -14,12 +14,17 @@ def parse_args():
     )
     parser.add_argument("-s", "--spacing", type=float, default=p.spacing_default)
     parser.add_argument("-b", "--bleed", type=float, default=p.bleed_default)
-    parser.add_argument("-p", "--page_size", default=p.page_size_default)
-    parser.add_argument("-ch", "--crop_height", type=float, default=p.crop_h_default)
-    parser.add_argument("-cw", "--crop_width", type=float, default=p.crop_w_default)
+    parser.add_argument("-p", "--page-size", default=p.page_size_default)
+    parser.add_argument("-ch", "--crop-height", type=float, default=p.crop_h_default)
+    parser.add_argument("-cw", "--crop-width", type=float, default=p.crop_w_default)
     parser.add_argument("--card_backs", type=bool, default=p.card_backs_default)
     parser.add_argument(
         "--crop_mark_size", type=float, default=p.crop_mark_size_default
+    )
+    parser.add_argument(
+        "--no-aggregate-backs",
+        action=argparse.BooleanOptionalAction,
+        default=p.aggregate_backs_default,
     )
     return parser.parse_args()
 
@@ -83,7 +88,6 @@ class Page:
                 )
             )
         else:
-            print(self.card_width)
             return image.resize((self.card_width, self.card_height))
 
     def crop_image(self, image, crop):
@@ -330,16 +334,22 @@ def create_pages(args):
     if cards is None:
         raise Exception("No cards found.")
 
-    card_list = []
-    for i, card in enumerate(cards):
-        for _ in card.find("slots").text.split(","):
-            card_list.append(card)
-    cards = card_list
+    cards = [i for i in cards]
 
-    if backs is not None:
+    if backs is not None and not args.no_aggregate_backs:
         search_ahead_for_page_back(cards, backs, page, page_back, 0)
 
+    cards_with_backs = []
+
+    print(args.no_aggregate_backs)
+    if backs is not None and args.no_aggregate_backs and not args.card_backs:
+        cards_with_backs = find_cards_with_backs(cards, backs)
+        cards = cards_with_backs + cards
+        cards = sorted(set(cards), key=cards.index)
+
     for i, card in enumerate(cards):
+        if i < len(cards_with_backs):
+            page.has_back = True
         if page.is_empty:
             print(f"Creating page {page_count}...")
 
@@ -350,19 +360,19 @@ def create_pages(args):
         else:
             card_back = None
 
-        # for _ in card.find("slots").text.split(","):
-        add_card(card, card_back, page, page_back)
-        if page.is_full:
-            print()
-            print(f"Saving page {page_count}... ", end="", flush=True)
-            save_pages(page, page_back, page_count)
-            print("Saved!")
-            print()
+        for _ in card.find("slots").text.split(","):
+            add_card(card, card_back, page, page_back)
 
-            if backs is not None:
-                search_ahead_for_page_back(cards, backs, page, page_back, i + 1)
+            if page.is_full:
+                print()
+                print(f"Saving page {page_count}... ", end="", flush=True)
+                save_pages(page, page_back, page_count)
+                print("Saved!")
+                print()
 
-            page_count += 1
+                if backs is not None and not args.no_aggregate_backs:
+                    search_ahead_for_page_back(cards, backs, page, page_back, i + 1)
+                page_count += 1
 
     if not page.is_empty:
         print(f"Saving page {page_count}... ", end="")
@@ -387,6 +397,16 @@ def search_ahead_for_page_back(cards, backs, page, page_back, start):
     # No backs found
     page.has_back = False
     return
+
+
+def find_cards_with_backs(cards, backs):
+    cards_with_backs = []
+    back_slots = [back.find("slots").text for back in backs]
+    for card in cards:
+        if card.find("slots").text in back_slots:
+            cards_with_backs.append(card)
+
+    return cards_with_backs
 
 
 def check_xml(card):

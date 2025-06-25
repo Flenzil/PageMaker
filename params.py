@@ -29,6 +29,7 @@ card_widths = {
 # Add the generic magic back to each card
 card_backs_default = False
 add_magic_backs = False
+aggregate_backs_default = True
 
 # A4 pages can only hold 3x3 magic cards
 columns = 3
