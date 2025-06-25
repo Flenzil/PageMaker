@@ -6,37 +6,9 @@ import xml.etree.ElementTree as ET
 
 import params as p
 
-
-def parse_args():
-    parser = argparse.ArgumentParser(description="Page Maker")
-    parser.add_argument(
-        "-q", "--quality", choices=["low", "medium", "high"], default="high"
-    )
-    parser.add_argument("-s", "--spacing", type=float, default=p.spacing_default)
-    parser.add_argument("-b", "--bleed", type=float, default=p.bleed_default)
-    parser.add_argument("-p", "--page-size", default=p.page_size_default)
-    parser.add_argument("-ch", "--crop-height", type=float, default=p.crop_h_default)
-    parser.add_argument("-cw", "--crop-width", type=float, default=p.crop_w_default)
-    parser.add_argument("--card_backs", type=bool, default=p.card_backs_default)
-    parser.add_argument(
-        "--crop_mark_size", type=float, default=p.crop_mark_size_default
-    )
-    parser.add_argument(
-        "--no-aggregate-backs",
-        action=argparse.BooleanOptionalAction,
-        default=p.aggregate_backs_default,
-    )
-    return parser.parse_args()
-
-
-def convert_mm_to_pixels(card_width, mm):
-    pixels_per_mm = card_width / 63
-    return int(mm * pixels_per_mm)
-
-
-def convert_pixels_to_mm(card_width, pixels):
-    mm_per_pixel = 63 / card_width
-    return pixels * mm_per_pixel
+IMAGE_PATH = "./images/"
+PAGE_PATH = "./pages/"
+XML_PATH = "./xml/"
 
 
 class Page:
@@ -122,38 +94,33 @@ class Page:
         image.putdata(img_cc)
 
     def add_bleed(self, image):
-        bleed_w_ratio = 0.0443
-        bleed_h_ratio = 0.02
-
         border = Image.new(
             "RGBA",
             (
-                int(self.card_width / (1 - 2 * bleed_w_ratio)),
-                int(self.card_height / (1 - 2 * bleed_h_ratio)),
+                self.card_width + 2 * self.card_bleed_w,
+                self.card_height + 2 * self.card_bleed_h,
             ),
             (0, 0, 0, 0),
         )
         border.paste(
             image,
-            (
-                int(self.card_width * bleed_w_ratio),
-                int(self.card_height * bleed_h_ratio),
-            ),
+            (self.card_bleed_w, self.card_bleed_h),
         )
 
         return border
 
     def add_image_to_page(self, image, crop, bleed=False, add_bleed=False):
+        print(bleed)
         if not add_bleed:
             image = self.resize_image(image, bleed)
         else:
-            image = self.resize_image(image, True)
-
-        if not bleed:
-            image = self.crop_image(image, crop)
+            image = self.resize_image(image, False)
 
         if add_bleed:
             image = self.add_bleed(image)
+
+        if not bleed:
+            image = self.crop_image(image, crop)
 
         enhancer = ImageEnhance.Brightness(image)
         image = enhancer.enhance(1.1)
@@ -251,15 +218,36 @@ class Page:
         self.current_col = 0
 
 
-IMAGE_PATH = "./images/"
-PAGE_PATH = "./pages/"
-XML_PATH = "./xml/"
+def parse_args():
+    parser = argparse.ArgumentParser(description="Page Maker")
+    parser.add_argument(
+        "-q", "--quality", choices=["low", "medium", "high"], default="high"
+    )
+    parser.add_argument("-s", "--spacing", type=float, default=p.spacing_default)
+    parser.add_argument("-b", "--bleed", type=float, default=p.bleed_default)
+    parser.add_argument("-p", "--page-size", default=p.page_size_default)
+    parser.add_argument("-ch", "--crop-height", type=float, default=p.crop_h_default)
+    parser.add_argument("-cw", "--crop-width", type=float, default=p.crop_w_default)
+    parser.add_argument("--card_backs", type=bool, default=p.card_backs_default)
+    parser.add_argument(
+        "--crop_mark_size", type=float, default=p.crop_mark_size_default
+    )
+    parser.add_argument(
+        "--no-aggregate-backs",
+        action=argparse.BooleanOptionalAction,
+        default=p.aggregate_backs_default,
+    )
+    return parser.parse_args()
 
 
-def main():
-    check_all_cards_are_present()
-    clear_pages_folder()
-    create_pages(parse_args())
+def convert_mm_to_pixels(card_width, mm):
+    pixels_per_mm = card_width / 63
+    return int(mm * pixels_per_mm)
+
+
+def convert_pixels_to_mm(card_width, pixels):
+    mm_per_pixel = 63 / card_width
+    return pixels * mm_per_pixel
 
 
 # Sometimes mpcfill misses an image download for some reason so this checks
@@ -318,8 +306,137 @@ def get_card_info():
     return card_backs
 
 
-# Place card images in a page for printing. Page ratios are set so that
-# printing onto a a4 page will result in realistic size cards.
+def search_ahead_for_page_back(cards, backs, page, page_back, start):
+    for j in range(p.columns * p.rows):
+        try:
+            if get_card_back(cards[start + j], backs) is not None:
+                page.has_back = True
+                return
+        except IndexError:
+            return
+        """
+        # Skip ahead if there multiple identical cards in a row (eg basic lands)
+        if cards[start + j].find("slots") is not None:
+            j += len(cards[start + j].find("slots").text.split(","))
+        """
+
+    # No backs found
+    page.has_back = False
+    return
+
+
+def find_cards_with_backs(cards, backs):
+    cards_with_backs = []
+    back_slots = [back.find("slots").text for back in backs]
+    for card in cards:
+        if card.find("slots").text in back_slots:
+            cards_with_backs.append(card)
+
+    return cards_with_backs
+
+
+def get_card_back(card, backs):
+    for back in backs:
+        card_slot = card.find("slots")
+        back_slot = back.find("slots")
+        if card_slot is not None and back_slot is not None:
+            if card_slot.text == back_slot.text:
+                return back
+
+    if p.add_magic_backs:
+        with open(XML_PATH + "cards.xml") as f:
+            root = ET.parse(f).getroot()
+            card_back = root.find("cardback")
+            if card_back is not None:
+                return card_back.text
+            else:
+                raise Exception("Card back not found.")
+
+
+def save_pages(page, back, name):
+    page.save_page(PAGE_PATH + f"/{name}.jpg")
+
+    if page.has_back:
+        back.save_page(PAGE_PATH + f"/{name}_back.jpg")
+
+    back.clear_page()
+    page.clear_page()
+
+
+def find_card_image(card):
+    for card_image in os.listdir(IMAGE_PATH):
+        if "Zone.Identifier" in card_image:
+            continue
+        try:
+            card_id = card.find("id").text
+        except AttributeError:
+            if p.add_magic_backs:
+                card_id = card
+            else:
+                raise Exception(
+                    f"Card back not found for {card.find('query').text} and generic backs is not enabled"
+                )
+
+        import re
+
+        try:
+            id = re.findall(r"\((?=[^\(]*$).*(?=\)\.)", card_image)[-1][1:]
+        except IndexError:
+            raise Exception(f"{card.find('query').text} not found!")
+        if id == card_id:
+            return IMAGE_PATH + card_image
+
+
+# Add card to page, also adds the backside of the card to a seperate
+# page if applicable, for double sided cards for example.
+def add_card(card, card_back, page, page_back):
+    print(f"Adding {card.find('query').text.title()}")
+    if set(card.find("id").text) == set("x") or card.find("name").text[:2] == "c ":
+        crop = False
+    else:
+        crop = True
+
+    if page.has_back:
+        bleed = True
+    else:
+        bleed = False
+
+    # Non MPCFill double sided cards need bleed added manually
+    if bleed == True and crop == False:
+        add_bleed = True
+    else:
+        add_bleed = False
+
+    card_image = find_card_image(card)
+    if card_image is None:
+        raise Exception(f'Image for "{card.find("query").text}" not found')
+
+    if card_back is not None:
+        back_image = find_card_image(card_back)
+        if back_image is None:
+            raise Exception(f'Image for "{card_back.find("query").text}" not found')
+
+    if card_back is None:
+        image = Image.open(card_image)
+        page.add_image_to_page(image, crop, bleed=bleed, add_bleed=add_bleed)
+    else:
+        image = Image.open(card_image)
+        image_back = Image.open(back_image)
+
+        page_back.current_row = page.current_row
+        page_back.current_col = p.columns - 1 - page.current_col
+
+        page.add_image_to_page(image, crop, bleed=bleed, add_bleed=add_bleed)
+        page_back.add_image_to_page(image_back, crop, bleed=bleed, add_bleed=add_bleed)
+
+        page.has_back = True
+
+
+def check_xml(card):
+    if card.find("slots") is None:
+        raise Exception('Malformed xml file: "slots" element missing.')
+
+
 def create_pages(args):
     page = Page(args)
     page_back = Page(args)
@@ -380,135 +497,10 @@ def create_pages(args):
         print("Saved!")
 
 
-def search_ahead_for_page_back(cards, backs, page, page_back, start):
-    for j in range(p.columns * p.rows):
-        try:
-            if get_card_back(cards[start + j], backs) is not None:
-                page.has_back = True
-                return
-        except IndexError:
-            return
-        """
-        # Skip ahead if there multiple identical cards in a row (eg basic lands)
-        if cards[start + j].find("slots") is not None:
-            j += len(cards[start + j].find("slots").text.split(","))
-        """
-
-    # No backs found
-    page.has_back = False
-    return
-
-
-def find_cards_with_backs(cards, backs):
-    cards_with_backs = []
-    back_slots = [back.find("slots").text for back in backs]
-    for card in cards:
-        if card.find("slots").text in back_slots:
-            cards_with_backs.append(card)
-
-    return cards_with_backs
-
-
-def check_xml(card):
-    if card.find("slots") is None:
-        raise Exception('Malformed xml file: "slots" element missing.')
-
-
-def get_card_back(card, backs):
-    for back in backs:
-        card_slot = card.find("slots")
-        back_slot = back.find("slots")
-        if card_slot is not None and back_slot is not None:
-            if card_slot.text == back_slot.text:
-                return back
-
-    if p.add_magic_backs:
-        with open(XML_PATH + "cards.xml") as f:
-            root = ET.parse(f).getroot()
-            card_back = root.find("cardback")
-            if card_back is not None:
-                return card_back.text
-            else:
-                raise Exception("Card back not found.")
-
-
-def save_pages(page, back, name):
-    page.save_page(PAGE_PATH + f"/{name}.jpg")
-
-    if page.has_back:
-        back.save_page(PAGE_PATH + f"/{name}_back.jpg")
-
-    back.clear_page()
-    page.clear_page()
-
-
-# Add card to page, also adds the backside of the card to a seperate
-# page if applicable, for double sided cards for example.
-def add_card(card, card_back, page, page_back):
-    print(f"Adding {card.find('query').text.title()}")
-    if set(card.find("id").text) == set("x") or card.find("name").text[:2] == "c ":
-        crop = False
-    else:
-        crop = True
-
-    if page.has_back:
-        bleed = True
-    else:
-        bleed = False
-
-    # Non MPCFill double sided cards need bleed added manually
-    if bleed == True and crop == False:
-        add_bleed = True
-    else:
-        add_bleed = False
-
-    card_image = find_card_image(card)
-    if card_image is None:
-        raise Exception(f'Image for "{card.find("query").text}" not found')
-
-    if card_back is not None:
-        back_image = find_card_image(card_back)
-        if back_image is None:
-            raise Exception(f'Image for "{card_back.find("query").text}" not found')
-
-    if card_back is None:
-        image = Image.open(card_image)
-        page.add_image_to_page(image, crop, bleed=bleed, add_bleed=add_bleed)
-    else:
-        image = Image.open(card_image)
-        image_back = Image.open(back_image)
-
-        page_back.current_row = page.current_row
-        page_back.current_col = p.columns - 1 - page.current_col
-
-        page.add_image_to_page(image, crop, bleed=bleed, add_bleed=add_bleed)
-        page_back.add_image_to_page(image_back, crop, bleed=bleed, add_bleed=add_bleed)
-
-        page.has_back = True
-
-
-def find_card_image(card):
-    for card_image in os.listdir(IMAGE_PATH):
-        if "Zone.Identifier" in card_image:
-            continue
-        try:
-            card_id = card.find("id").text
-        except AttributeError:
-            if p.add_magic_backs:
-                card_id = card
-            else:
-                raise Exception(
-                    f"Card back not found for {card.find('query').text} and generic backs is not enabled"
-                )
-
-        import re
-
-        try:
-            id = re.findall(r"\((?=[^\(]*$).*(?=\)\.)", card_image)[-1][1:]
-        except IndexError:
-            raise Exception(f"{card.find('query').text} not found!")
-        if id == card_id:
-            return IMAGE_PATH + card_image
+def main():
+    check_all_cards_are_present()
+    clear_pages_folder()
+    create_pages(parse_args())
 
 
 if __name__ == "__main__":
