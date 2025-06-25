@@ -1,24 +1,76 @@
 import os
 import glob
+import argparse
 from PIL import Image, ImageEnhance
 import xml.etree.ElementTree as ET
 
 import params as p
 
 
-class Page:
-    def __init__(self, card_width):
-        self.card_width = card_width + p.card_width_adjust
-        self.card_height = int(p.card_ratio * card_width)
+def parse_args():
+    parser = argparse.ArgumentParser(description="Page Maker")
+    parser.add_argument(
+        "-q", "--quality", choices=["low", "medium", "high"], default="high"
+    )
+    parser.add_argument("-s", "--spacing", type=float, default=p.spacing_default)
+    parser.add_argument("-b", "--bleed", type=float, default=p.bleed_default)
+    parser.add_argument("-p", "--page_size", default=p.page_size_default)
+    parser.add_argument("-ch", "--crop_height", type=float, default=p.crop_h_default)
+    parser.add_argument("-cw", "--crop_width", type=float, default=p.crop_w_default)
+    parser.add_argument("--card_backs", type=bool, default=p.card_backs_default)
+    parser.add_argument(
+        "--crop_mark_size", type=float, default=p.crop_mark_size_default
+    )
+    return parser.parse_args()
 
-        self.page_width = int(p.card_to_page_width_ratio * card_width)
+
+def convert_mm_to_pixels(card_width, mm):
+    pixels_per_mm = card_width / 63
+    return int(mm * pixels_per_mm)
+
+
+def convert_pixels_to_mm(card_width, pixels):
+    mm_per_pixel = 63 / card_width
+    return pixels * mm_per_pixel
+
+
+class Page:
+    def __init__(self, args):
+        self.card_width = p.card_widths[args.quality]
+        self.card_height = int(p.card_ratio * self.card_width)
+
+        self.spacing = convert_mm_to_pixels(self.card_width, args.spacing)
+
+        self.card_bleed_w = convert_mm_to_pixels(self.card_width, args.bleed)
+        self.card_bleed_h = int(self.card_bleed_w)
+
+        self.crop_w = convert_mm_to_pixels(self.card_width, args.crop_width)
+        self.crop_h = convert_mm_to_pixels(self.card_width, args.crop_height)
+
+        self.crop_mark_size = convert_mm_to_pixels(self.card_width, args.crop_mark_size)
+
+        self.page_width = convert_mm_to_pixels(
+            self.card_width, p.page_widths[args.page_size]
+        )
         self.page_height = int(p.page_ratio * self.page_width)
 
-        self.margin_w = int(p.margin_w_ratio * self.page_width)
-        self.margin_top = int(p.margin_top_ratio * self.page_height)
+        self.margin_w = int(
+            0.5
+            * (
+                self.page_width
+                - p.columns * self.card_width
+                - (p.columns - 1) * self.spacing
+            )
+        )
 
-        self.card_bleed_w = int(card_width * p.card_bleed_ratio_w)
-        self.card_bleed_h = int(self.card_height * p.card_bleed_ratio_h)
+        self.margin_top = int(
+            0.5
+            * (
+                self.page_height
+                - p.rows * self.card_height
+                - (p.rows - 1) * self.spacing
+            )
+        )
 
         self.clear_page()
 
@@ -26,24 +78,27 @@ class Page:
         if bleed:
             return image.resize(
                 (
-                    self.card_width + self.card_bleed_w,
-                    self.card_height + self.card_bleed_h,
+                    self.card_width + 2 * self.card_bleed_w,
+                    self.card_height + 2 * self.card_bleed_h,
                 )
             )
         else:
+            print(self.card_width)
             return image.resize((self.card_width, self.card_height))
 
     def crop_image(self, image, crop):
         if crop:
-            border_crop_w = p.border_crop_w
-            border_crop_h = p.border_crop_h
+            border_crop_w = self.crop_w
+            border_crop_h = self.crop_h
         else:
             border_crop_w = 0
             border_crop_h = 0
-        left = int(border_crop_w * self.card_width)
-        right = self.card_width - int(border_crop_w * self.card_width)
-        upper = int(border_crop_h * self.card_height)
-        lower = self.card_height - int(border_crop_h * self.card_height)
+
+        left = border_crop_w
+        right = self.card_width - border_crop_w
+        upper = border_crop_h
+        lower = self.card_height - border_crop_h
+
         return self.resize_image(image.crop((left, upper, right, lower)), False)
 
     def colour_correct_image(self, image, colour_shift):
@@ -88,7 +143,7 @@ class Page:
         if not add_bleed:
             image = self.resize_image(image, bleed)
         else:
-            image = self.resize_image(image, False)
+            image = self.resize_image(image, True)
 
         if not bleed:
             image = self.crop_image(image, crop)
@@ -110,17 +165,19 @@ class Page:
         if bleed:
             x = (
                 self.margin_w
-                - int(self.card_bleed_w / 2)
-                + self.current_col * (self.card_width + self.card_bleed_w + p.spacing)
+                - p.columns * self.card_bleed_w
+                + self.current_col
+                * (self.card_width + 2 * self.card_bleed_w + self.spacing)
             )
             y = (
                 self.margin_top
-                - int(self.card_bleed_h / 2)
-                + self.current_row * (self.card_height + self.card_bleed_h + p.spacing)
+                - p.rows * self.card_bleed_h
+                + self.current_row
+                * (self.card_height + 2 * self.card_bleed_h + self.spacing)
             )
         else:
-            x = self.margin_w + self.current_col * (self.card_width + p.spacing)
-            y = self.margin_top + self.current_row * (self.card_height + p.spacing)
+            x = self.margin_w + self.current_col * (self.card_width + self.spacing)
+            y = self.margin_top + self.current_row * (self.card_height + self.spacing)
 
         self.page.paste(image, (x, y))
         if bleed:
@@ -137,8 +194,8 @@ class Page:
             self.is_full = True
 
     def add_crop_marks(self, x, y):
-        x_b = x + int(self.card_bleed_w / 2)
-        y_b = y + int(self.card_bleed_h / 2)
+        x_b = x + self.card_bleed_w
+        y_b = y + self.card_bleed_h
         crop_marks = [
             (x_b, y_b),
             (x_b + self.card_width, y_b),
@@ -146,10 +203,11 @@ class Page:
             (x_b + self.card_width, y_b + self.card_height),
         ]
 
-        crop_mark_width = 4 * p.spacing
-        crop_mark_start = -int(crop_mark_width / 2)
-        crop_mark_end = int(crop_mark_width / 2)
-        outline_width = 2
+        crop_mark_size = max(2, self.crop_mark_size)
+        crop_mark_start = -int(crop_mark_size / 2)
+        crop_mark_end = int(crop_mark_size / 2)
+        outline_width = max(2, int(self.crop_mark_size / 3))
+
         for crop_mark in crop_marks:
             for i in range(crop_mark_start, crop_mark_end):
                 for j in range(crop_mark_start, crop_mark_end):
@@ -189,7 +247,6 @@ class Page:
         self.current_col = 0
 
 
-CARD_WIDTH = 3264
 IMAGE_PATH = "./images/"
 PAGE_PATH = "./pages/"
 XML_PATH = "./xml/"
@@ -198,7 +255,7 @@ XML_PATH = "./xml/"
 def main():
     check_all_cards_are_present()
     clear_pages_folder()
-    create_pages()
+    create_pages(parse_args())
 
 
 # Sometimes mpcfill misses an image download for some reason so this checks
@@ -259,9 +316,9 @@ def get_card_info():
 
 # Place card images in a page for printing. Page ratios are set so that
 # printing onto a a4 page will result in realistic size cards.
-def create_pages():
-    page = Page(CARD_WIDTH)
-    page_back = Page(CARD_WIDTH)
+def create_pages(args):
+    page = Page(args)
+    page_back = Page(args)
 
     page_count = 1
 
@@ -318,8 +375,6 @@ def search_ahead_for_page_back(cards, backs, page, page_back, start):
         try:
             if get_card_back(cards[start + j], backs) is not None:
                 page.has_back = True
-                page.margin_w = int(p.margin_w_ratio_with_bleed * page.page_width)
-                page_back.margin_w = int(p.margin_w_ratio_with_bleed * page.page_width)
                 return
         except IndexError:
             return
@@ -331,8 +386,6 @@ def search_ahead_for_page_back(cards, backs, page, page_back, start):
 
     # No backs found
     page.has_back = False
-    page.margin_w = int(p.margin_w_ratio * page.page_width)
-    page_back.margin_w = int(p.margin_w_ratio * page.page_width)
     return
 
 
