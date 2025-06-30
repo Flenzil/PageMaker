@@ -95,12 +95,12 @@ class Page:
 
     def add_bleed(self, image):
         border = Image.new(
-            "RGBA",
+            "RGB",
             (
                 self.card_width + 2 * self.card_bleed_w,
                 self.card_height + 2 * self.card_bleed_h,
             ),
-            (0, 0, 0, 0),
+            (0, 0, 0),
         )
         border.paste(
             image,
@@ -110,7 +110,6 @@ class Page:
         return border
 
     def add_image_to_page(self, image, crop, bleed=False, add_bleed=False):
-        print(bleed)
         if not add_bleed:
             image = self.resize_image(image, bleed)
         else:
@@ -197,19 +196,13 @@ class Page:
                     )
 
     def save_page(self, filename):
-        # Modify brightness of image (not currently used)
-        enhancer = ImageEnhance.Brightness(self.page)
-        img = enhancer.enhance(1)
-
-        # Discard alpha channel to save as .jpg
-        img = img.convert("RGB")
-
-        img.save(filename)
-        # self.page.save(filename)
+        self.page.save(filename)
 
     def clear_page(self):
         self.page = Image.new(
-            "RGBA", (self.page_width, self.page_height), (255, 255, 255, 255)
+            "RGB",
+            (self.page_width, self.page_height),
+            color=(255, 255, 255) 
         )
         self.is_empty = True
         self.is_full = False
@@ -220,17 +213,22 @@ class Page:
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Page Maker")
-    parser.add_argument(
-        "-q", "--quality", choices=["low", "medium", "high"], default="high"
-    )
     parser.add_argument("-s", "--spacing", type=float, default=p.spacing_default)
     parser.add_argument("-b", "--bleed", type=float, default=p.bleed_default)
     parser.add_argument("-p", "--page-size", default=p.page_size_default)
     parser.add_argument("-ch", "--crop-height", type=float, default=p.crop_h_default)
     parser.add_argument("-cw", "--crop-width", type=float, default=p.crop_w_default)
     parser.add_argument("--card_backs", type=bool, default=p.card_backs_default)
+
     parser.add_argument(
-        "--crop_mark_size", type=float, default=p.crop_mark_size_default
+        "-q", "--quality",
+        choices=["low", "medium", "high"],
+        default="high"
+    )
+    parser.add_argument(
+        "--crop_mark_size",
+        type=float,
+        default=p.crop_mark_size_default
     )
     parser.add_argument(
         "--no-aggregate-backs",
@@ -458,7 +456,6 @@ def create_pages(args):
 
     cards_with_backs = []
 
-    print(args.no_aggregate_backs)
     if backs is not None and args.no_aggregate_backs and not args.card_backs:
         cards_with_backs = find_cards_with_backs(cards, backs)
         cards = cards_with_backs + cards
