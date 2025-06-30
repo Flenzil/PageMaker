@@ -95,12 +95,12 @@ class Page:
 
     def add_bleed(self, image):
         border = Image.new(
-            "RGB",
-            (
+            mode="RGB",
+            size=(
                 self.card_width + 2 * self.card_bleed_w,
                 self.card_height + 2 * self.card_bleed_h,
             ),
-            (0, 0, 0),
+            color=(0,0,0),
         )
         border.paste(
             image,
@@ -200,15 +200,64 @@ class Page:
 
     def clear_page(self):
         self.page = Image.new(
-            "RGB",
-            (self.page_width, self.page_height),
-            color=(255, 255, 255) 
+            mode="RGB",
+            size=(self.page_width, self.page_height),
+            color=(255,255,255)
         )
         self.is_empty = True
         self.is_full = False
         self.has_back = False
         self.current_row = 0
         self.current_col = 0
+
+class Card:
+    def __init__(self, card, back=None, instances=1):
+        self.card = card
+        self.instances = instances
+
+        self.id = self.card.find("id").text
+        self.image = self.find_card_images(self.id)
+        self.name = self.card.find("name").text.title()
+
+        if back is not None:
+            self.back = back
+            self.has_back = True
+            try:
+                self.id_back = self.back.find("id").text
+                self.name_back = self.back.find("name").text.title()
+            except AttributeError:
+                self.id_back = self.back.text
+                self.name_back = "Card Back"
+            self.image_back = self.find_card_images(self.id_back)
+            print(self.id_back)
+        else:
+            self.back = None
+            self.id_back = None
+            self.image_back = None
+            self.name_back = ""
+            self.has_back = False
+
+    def __repr__(self):
+        if self.has_back:
+            return f"{self.name} // {self.name_back}"
+        else:
+            return self.name 
+
+    def find_card_images(self, card_id):
+        for card_image in os.listdir(IMAGE_PATH):
+            if "Zone.Identifier" in card_image:
+                continue
+
+            import re
+
+            try:
+                id = re.findall(r"\((?=[^\(]*$).*(?=\)\.)", card_image)[-1][1:]
+            except IndexError:
+                raise Exception(f"{self.name} or {self.name_back} not found!")
+
+            if id == card_id:
+                return IMAGE_PATH + card_image
+
 
 
 def parse_args():
@@ -246,7 +295,6 @@ def convert_mm_to_pixels(card_width, mm):
 def convert_pixels_to_mm(card_width, pixels):
     mm_per_pixel = 63 / card_width
     return pixels * mm_per_pixel
-
 
 # Sometimes mpcfill misses an image download for some reason so this checks
 # if all of the images for the cards in the .xml are present. Raises an
@@ -295,62 +343,6 @@ def clear_pages_folder():
         os.remove(i)
 
 
-def get_card_info():
-    card_backs = []
-    with open(XML_PATH + "cards.xml") as f:
-        back_info = ET.parse(f).getroot().find("backs")
-        if back_info is not None:
-            card_backs.append(back_info)
-    return card_backs
-
-
-def search_ahead_for_page_back(cards, backs, page, page_back, start):
-    for j in range(p.columns * p.rows):
-        try:
-            if get_card_back(cards[start + j], backs) is not None:
-                page.has_back = True
-                return
-        except IndexError:
-            return
-        """
-        # Skip ahead if there multiple identical cards in a row (eg basic lands)
-        if cards[start + j].find("slots") is not None:
-            j += len(cards[start + j].find("slots").text.split(","))
-        """
-
-    # No backs found
-    page.has_back = False
-    return
-
-
-def find_cards_with_backs(cards, backs):
-    cards_with_backs = []
-    back_slots = [back.find("slots").text for back in backs]
-    for card in cards:
-        if card.find("slots").text in back_slots:
-            cards_with_backs.append(card)
-
-    return cards_with_backs
-
-
-def get_card_back(card, backs):
-    for back in backs:
-        card_slot = card.find("slots")
-        back_slot = back.find("slots")
-        if card_slot is not None and back_slot is not None:
-            if card_slot.text == back_slot.text:
-                return back
-
-    if p.add_magic_backs:
-        with open(XML_PATH + "cards.xml") as f:
-            root = ET.parse(f).getroot()
-            card_back = root.find("cardback")
-            if card_back is not None:
-                return card_back.text
-            else:
-                raise Exception("Card back not found.")
-
-
 def save_pages(page, back, name):
     page.save_page(PAGE_PATH + f"/{name}.jpg")
 
@@ -360,36 +352,11 @@ def save_pages(page, back, name):
     back.clear_page()
     page.clear_page()
 
-
-def find_card_image(card):
-    for card_image in os.listdir(IMAGE_PATH):
-        if "Zone.Identifier" in card_image:
-            continue
-        try:
-            card_id = card.find("id").text
-        except AttributeError:
-            if p.add_magic_backs:
-                card_id = card
-            else:
-                raise Exception(
-                    f"Card back not found for {card.find('query').text} and generic backs is not enabled"
-                )
-
-        import re
-
-        try:
-            id = re.findall(r"\((?=[^\(]*$).*(?=\)\.)", card_image)[-1][1:]
-        except IndexError:
-            raise Exception(f"{card.find('query').text} not found!")
-        if id == card_id:
-            return IMAGE_PATH + card_image
-
-
 # Add card to page, also adds the backside of the card to a seperate
 # page if applicable, for double sided cards for example.
-def add_card(card, card_back, page, page_back):
-    print(f"Adding {card.find('query').text.title()}")
-    if set(card.find("id").text) == set("x") or card.find("name").text[:2] == "c ":
+def add_card(card, page, page_back):
+    print(f"Adding {card.card.find('query').text.title()}")
+    if set(card.card.find("id").text) == set("x") or card.card.find("name").text[:2] == "c ":
         crop = False
     else:
         crop = True
@@ -405,21 +372,19 @@ def add_card(card, card_back, page, page_back):
     else:
         add_bleed = False
 
-    card_image = find_card_image(card)
-    if card_image is None:
-        raise Exception(f'Image for "{card.find("query").text}" not found')
+    if card.image is None:
+        raise Exception(f'Image for "{card.name}" not found')
 
-    if card_back is not None:
-        back_image = find_card_image(card_back)
-        if back_image is None:
-            raise Exception(f'Image for "{card_back.find("query").text}" not found')
+    if card.back is not None:
+        if card.image_back is None:
+            raise Exception(f'Image for "{card.name_back}" not found')
 
-    if card_back is None:
-        image = Image.open(card_image)
+    if card.back is None:
+        image = Image.open(card.image)
         page.add_image_to_page(image, crop, bleed=bleed, add_bleed=add_bleed)
     else:
-        image = Image.open(card_image)
-        image_back = Image.open(back_image)
+        image = Image.open(card.image)
+        image_back = Image.open(card.image_back)
 
         page_back.current_row = page.current_row
         page_back.current_col = p.columns - 1 - page.current_col
@@ -427,12 +392,64 @@ def add_card(card, card_back, page, page_back):
         page.add_image_to_page(image, crop, bleed=bleed, add_bleed=add_bleed)
         page_back.add_image_to_page(image_back, crop, bleed=bleed, add_bleed=add_bleed)
 
-        page.has_back = True
+        #page.has_back = True
 
 
-def check_xml(card):
-    if card.find("slots") is None:
-        raise Exception('Malformed xml file: "slots" element missing.')
+def create_cards(args):
+    with open(XML_PATH + "cards.xml") as f:
+        root = ET.parse(f).getroot()
+        cards = root.find("fronts")
+        backs = root.find("backs")
+        generic_card_back = root.find("cardback")
+
+    if cards is None:
+        raise Exception("No cards found.")
+    if backs is None:
+        backs = []
+
+    card_objs = []
+
+    slots_back_map = [
+        (back, set(back.find("slots").text.split(","))) for back in backs
+    ]
+    for card in cards:
+        slots = set(card.find("slots").text.split(","))
+
+        for back, slots_back in slots_back_map:
+            if slots & slots_back:
+                card_objs.append(Card(card, back=back, instances=len(slots)))
+                break
+            if args.card_backs:
+                card_objs.append(Card(card, back=generic_card_back, instances=len(slots)))
+        else:
+            card_objs.append(Card(card, instances=len(slots)))
+
+    if args.no_aggregate_backs:
+        return card_objs
+    else:
+        return sorted(card_objs, key=lambda x: x.has_back)
+
+
+def batch_cards(cards, page):
+    batch = []
+    i = 0
+    for card in cards:
+        for _ in range(card.instances):
+            batch.append(card)
+            if card.has_back:
+                page.has_back = True
+            if i >= 8:
+                return batch
+            i += 1
+    return batch
+
+def add_card_to_page(batch, cards, page, page_back):
+    for card in batch:
+        add_card(card, page, page_back)
+        card.instances -= 1
+
+        if card.instances <= 0:
+            cards.remove(card)
 
 
 def create_pages(args):
@@ -441,52 +458,24 @@ def create_pages(args):
 
     page_count = 1
 
-    with open(XML_PATH + "cards.xml") as f:
-        root = ET.parse(f).getroot()
-        cards = root.find("fronts")
-        backs = root.find("backs")
+    cards = create_cards(args)
+    batch = batch_cards(cards, page)
 
-    if cards is None:
-        raise Exception("No cards found.")
-
-    cards = [i for i in cards]
-
-    if backs is not None and not args.no_aggregate_backs:
-        search_ahead_for_page_back(cards, backs, page, page_back, 0)
-
-    cards_with_backs = []
-
-    if backs is not None and args.no_aggregate_backs and not args.card_backs:
-        cards_with_backs = find_cards_with_backs(cards, backs)
-        cards = cards_with_backs + cards
-        cards = sorted(set(cards), key=cards.index)
-
-    for i, card in enumerate(cards):
-        if i < len(cards_with_backs):
-            page.has_back = True
+    while len(cards) > 0:
         if page.is_empty:
             print(f"Creating page {page_count}...")
+        add_card_to_page(batch, cards, page, page_back)
 
-        check_xml(card)
+        if page.is_full:
+            print()
+            print(f"Saving page {page_count}... ", end="", flush=True)
+            save_pages(page, page_back, page_count)
+            print("Saved!")
+            print()
 
-        if backs is not None:
-            card_back = get_card_back(card, backs)
-        else:
-            card_back = None
-
-        for _ in card.find("slots").text.split(","):
-            add_card(card, card_back, page, page_back)
-
-            if page.is_full:
-                print()
-                print(f"Saving page {page_count}... ", end="", flush=True)
-                save_pages(page, page_back, page_count)
-                print("Saved!")
-                print()
-
-                if backs is not None and not args.no_aggregate_backs:
-                    search_ahead_for_page_back(cards, backs, page, page_back, i + 1)
-                page_count += 1
+            page_count += 1
+        
+        batch = batch_cards(cards, page)
 
     if not page.is_empty:
         print(f"Saving page {page_count}... ", end="")
