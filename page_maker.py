@@ -54,8 +54,8 @@ class Page:
 
         self.clear_page()
 
-    def resize_image(self, image, bleed):
-        if bleed:
+    def resize_image(self, image, keep_bleed=False):
+        if keep_bleed:
             return image.resize(
                 (
                     self.card_width + 2 * self.card_bleed_w,
@@ -65,21 +65,13 @@ class Page:
         else:
             return image.resize((self.card_width, self.card_height))
 
-    def crop_image(self, image, crop):
-        if crop:
-            border_crop_w = self.crop_w
-            border_crop_h = self.crop_h
-        else:
-            border_crop_w = 0
-            border_crop_h = 0
-
-        left = border_crop_w
-        right = self.card_width - border_crop_w
-        upper = border_crop_h
-        lower = self.card_height - border_crop_h
-
-        return self.resize_image(image.crop((left, upper, right, lower)), False)
-
+    def crop_image(self, image):
+        left = self.crop_w
+        right = self.card_width + 2 * self.card_bleed_w - self.crop_w
+        upper = self.crop_h
+        lower = self.card_height + 2 * self.card_bleed_h - self.crop_h
+        return image.crop((left, upper, right, lower))
+    
     def colour_correct_image(self, image, colour_shift):
         if colour_shift == (0, 0, 0):
             return
@@ -112,30 +104,32 @@ class Page:
 
         return border
 
-    def add_image_to_page(self, image, crop, bleed=False, add_bleed=False):
-        if not add_bleed:
-            image = self.resize_image(image, bleed)
+    def add_image_to_page(self, card, is_back=False):
+        if is_back:
+            image = Image.open(card.image_back)
         else:
-            image = self.resize_image(image, False)
+            image = Image.open(card.image)
 
-        if add_bleed:
-            image = self.add_bleed(image)
+        if self.has_back:
+            keep_bleed = True
+        else:
+            keep_bleed = False
 
-        if not bleed:
-            image = self.crop_image(image, crop)
+        if card.has_bleed:
+            image = self.resize_image(image, keep_bleed=True)
+            if not keep_bleed:
+                image = self.crop_image(image)
+        else:
+            image = self.resize_image(image)
+            if keep_bleed:
+                image = self.add_bleed(image)
 
         enhancer = ImageEnhance.Brightness(image)
         image = enhancer.enhance(1.1)
 
-        self.colour_correct_image(
-            image,
-            (
-                0,
-                0,
-                0,
-            ),
-        )
-        if bleed:
+        self.colour_correct_image(image, (0, 0, 0,))
+
+        if keep_bleed:
             x = (
                 self.margin_w
                 - self.columns * self.card_bleed_w
@@ -153,7 +147,8 @@ class Page:
             y = self.margin_top + self.current_row * (self.card_height + self.spacing)
 
         self.page.paste(image, (x, y))
-        if bleed:
+
+        if keep_bleed:
             self.add_crop_marks(x, y)
 
         self.is_empty = False
@@ -221,6 +216,11 @@ class Card:
         self.id = self.card.find("id").text
         self.image = self.find_card_images(self.id)
         self.name = self.card.find("name").text.title()
+
+        if set(self.id) == set("x"):
+            self.has_bleed = False
+        else:
+            self.has_bleed = True
 
         if back is not None:
             self.back = back
@@ -358,21 +358,6 @@ def save_pages(page, back, name):
 # page if applicable, for double sided cards for example.
 def add_card(card, page, page_back):
     print(f"Adding {card.card.find('query').text.title()}")
-    if set(card.card.find("id").text) == set("x") or card.card.find("name").text[:2] == "c ":
-        crop = False
-    else:
-        crop = True
-
-    if page.has_back:
-        bleed = True
-    else:
-        bleed = False
-
-    # Non MPCFill double sided cards need bleed added manually
-    if bleed == True and crop == False:
-        add_bleed = True
-    else:
-        add_bleed = False
 
     if card.image is None:
         raise Exception(f'Image for "{card.name}" not found')
@@ -382,19 +367,13 @@ def add_card(card, page, page_back):
             raise Exception(f'Image for "{card.name_back}" not found')
 
     if card.back is None:
-        image = Image.open(card.image)
-        page.add_image_to_page(image, crop, bleed=bleed, add_bleed=add_bleed)
+        page.add_image_to_page(card)
     else:
-        image = Image.open(card.image)
-        image_back = Image.open(card.image_back)
-
         page_back.current_row = page.current_row
         page_back.current_col = page.columns - 1 - page.current_col
 
-        page.add_image_to_page(image, crop, bleed=bleed, add_bleed=add_bleed)
-        page_back.add_image_to_page(image_back, crop, bleed=bleed, add_bleed=add_bleed)
-
-        #page.has_back = True
+        page.add_image_to_page(card)
+        page_back.add_image_to_page(card, is_back=True)
 
 
 def create_cards(args):
@@ -411,11 +390,18 @@ def create_cards(args):
 
     card_objs = []
 
-    slots_back_map = [
-        (back, set(back.find("slots").text.split(","))) for back in backs
-    ]
+    slots_back_map = []
+    for back in backs:
+        if (slots_elem := back.find("slots")) is not None and slots_elem.text is not None:
+            slots_back_map.append((back, set(slots_elem.text.split(","))))
+        else:
+            raise Exception("A card is missing slot information!")
+
     for card in cards:
-        slots = set(card.find("slots").text.split(","))
+        if (slots_elem := card.find("slots")) is not None and slots_elem.text is not None:
+            slots = set(slots_elem.text.split(","))
+        else:
+            raise Exception("A card is missing slot information!")
 
         for back, slots_back in slots_back_map:
             if slots & slots_back:
