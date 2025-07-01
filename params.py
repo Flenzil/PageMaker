@@ -9,11 +9,11 @@ spacing_default = 0.1
 bleed_default = 3.175 # MPCFill images have a 1/8" = 3.175mm bleed on all sides.
 crop_w_default = 3.175
 crop_h_default = 3.175
-
 crop_mark_size_default = 0.75
 crop_mark_border_size_default = 0.2
-page_size_default = "a4"
 
+page_size_default = "a4"
+brightness_adjust_default = 1.0
 
 page_widths = {"a4": 210}
 columns = {"a4": 3}
@@ -32,3 +32,8 @@ no_aggregate_backs_default = False
 # Dimension Ratios
 card_ratio = 1.3968
 page_ratio = 1.4142135623730  # sqrt(2)
+
+try:
+    from params_local import * #NOQA
+except ImportError:
+    pass

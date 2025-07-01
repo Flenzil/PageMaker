@@ -25,6 +25,8 @@ class Page:
         self.crop_h = convert_mm_to_pixels(self.card_width, args.crop_height)
 
         self.crop_mark_size = convert_mm_to_pixels(self.card_width, args.crop_mark_size)
+        self.brightness_adjust = args.brightness_adjust
+
         self.page_size = args.page_size
         self.rows = p.rows[self.page_size]
         self.columns = p.columns[self.page_size]
@@ -95,7 +97,7 @@ class Page:
                 self.card_width + 2 * self.card_bleed_w,
                 self.card_height + 2 * self.card_bleed_h,
             ),
-            color=(0,0,0),
+            color=(0,0,0), #type: ignore
         )
         border.paste(
             image,
@@ -125,7 +127,7 @@ class Page:
                 image = self.add_bleed(image)
 
         enhancer = ImageEnhance.Brightness(image)
-        image = enhancer.enhance(1.1)
+        image = enhancer.enhance(self.brightness_adjust)
 
         self.colour_correct_image(image, (0, 0, 0,))
 
@@ -200,7 +202,7 @@ class Page:
         self.page = Image.new(
             mode="RGB",
             size=(self.page_width, self.page_height),
-            color=(255,255,255)
+            color=(255,255,255) #type: ignore
         )
         self.is_empty = True
         self.is_full = False
@@ -269,7 +271,8 @@ def parse_args():
     parser.add_argument("-p", "--page-size", default=p.page_size_default)
     parser.add_argument("-ch", "--crop-height", type=float, default=p.crop_h_default)
     parser.add_argument("-cw", "--crop-width", type=float, default=p.crop_w_default)
-    parser.add_argument("--card_backs", type=bool, default=p.card_backs_default)
+    parser.add_argument("--card-backs", type=bool, default=p.card_backs_default)
+    parser.add_argument("--brightness-adjust", type=float, default=p.brightness_adjust_default)
 
     parser.add_argument(
         "-q", "--quality",
