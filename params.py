@@ -27,6 +27,8 @@ card_widths = {
 
 # Add the generic magic back to each card
 card_backs_default = False
+
+#Collect cards with backs together, to minimise amount of pages that have back sides.
 no_aggregate_backs_default = False
 
 # Dimension Ratios

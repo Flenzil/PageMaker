@@ -12,22 +12,44 @@ XML_PATH = "./xml/"
 
 
 class Page:
+    """A virtual page onto which the card images are placed
+
+    This represents a single page containing cards and is used to
+    manipulate the images (cropping, resizing etc.) and ensuring 
+    that the cards print out to the right size. 
+    """
     def __init__(self, args):
+        """Initialise the page.
+            
+        Args:
+            args (Object): Command-line arguments from user.
+        """
         self.card_width = p.card_widths[args.quality]
         self.card_height = int(p.card_ratio * self.card_width)
 
+        #Space between cards.
         self.spacing = convert_mm_to_pixels(self.card_width, args.spacing)
 
+        #Bleed around cards, either added by MPCFill or added later to help
+        #decrease visibility of misalignment on two sided cards.
         self.card_bleed_w = convert_mm_to_pixels(self.card_width, args.bleed)
         self.card_bleed_h = int(self.card_bleed_w)
 
+        #Amount to crop the cards, default is equal to bleed.
         self.crop_w = convert_mm_to_pixels(self.card_width, args.crop_width)
         self.crop_h = convert_mm_to_pixels(self.card_width, args.crop_height)
 
+        #Size of crop marks added to aid with cutting on cards with preserved bleed
         self.crop_mark_size = convert_mm_to_pixels(self.card_width, args.crop_mark_size)
+
+        #Amount of brightning applied to cards, helps when some printers print
+        #dark.
         self.brightness_adjust = args.brightness_adjust
 
         self.page_size = args.page_size
+
+        #Number of rows and columns, set by the page size e.g a4 pages can hold 
+        #3x3 mtg cards.
         self.rows = p.rows[self.page_size]
         self.columns = p.columns[self.page_size]
 
@@ -36,6 +58,8 @@ class Page:
         )
         self.page_height = int(p.page_ratio * self.page_width)
 
+        #Margins around edge of page, derived by the negative space left by other
+        #variables.
         self.margin_w = int(
             0.5
             * (
@@ -54,9 +78,33 @@ class Page:
             )
         )
 
+        #Reset page
         self.clear_page()
 
+    def clear_page(self):
+        """Create empty page and reset associated variables"""
+        self.page = Image.new(
+            mode="RGB",
+            size=(self.page_width, self.page_height),
+            color=(255,255,255) #type: ignore
+        )
+        self.is_empty = True
+        self.is_full = False
+        self.has_back = False
+        self.current_row = 0
+        self.current_col = 0
+
     def resize_image(self, image, keep_bleed=False):
+        """Resizes images to the predefined card width so 
+        that the cards are the right size when printing. 
+        Can optionally allow the cards to keep the bleed that
+        MPCFill adds.
+
+        Args:
+            image (PIL.Image): image of card
+            keep_bleed (bool): resize card to correct size plus
+                               the bleed around the edges 
+        """
         if keep_bleed:
             return image.resize(
                 (
@@ -68,29 +116,26 @@ class Page:
             return image.resize((self.card_width, self.card_height))
 
     def crop_image(self, image):
+        """Crops the bleed that MPCFill adds to cards
+
+        Args:
+            image (PIL.Image): image of card
+        """
         left = self.crop_w
         right = self.card_width + 2 * self.card_bleed_w - self.crop_w
         upper = self.crop_h
         lower = self.card_height + 2 * self.card_bleed_h - self.crop_h
         return image.crop((left, upper, right, lower))
     
-    def colour_correct_image(self, image, colour_shift):
-        if colour_shift == (0, 0, 0):
-            return
-        img_data = image.getdata()
-
-        img_cc = []
-        for pixel in img_data:
-            img_cc.append(
-                (
-                    pixel[0] + colour_shift[0],
-                    pixel[1] + colour_shift[1],
-                    pixel[2] + colour_shift[2],
-                )
-            )
-        image.putdata(img_cc)
-
     def add_bleed(self, image):
+        """Non-MPCFill cards might not have the bleed but we want to
+        have bleed on pages that have a back side (for double-sided
+        cards and to allow for misalignment in prints) so we add the 
+        bleed here.
+
+        Args:
+            image (PIL.Image): image of card
+        """
         border = Image.new(
             mode="RGB",
             size=(
@@ -106,7 +151,50 @@ class Page:
 
         return border
 
+    def add_crop_marks(self, x, y):
+        """Add visual crop marks to guide cutting when bleed is present.
+        
+        Draws small squares at each corner of the card using a black border
+        with a white interior, ensuring visibility on any background.
+
+        Args:
+            x (int): x pixel position of top left corner of card
+            y (int): y pixel position of top left corner of card
+        """
+        x_b = x + self.card_bleed_w
+        y_b = y + self.card_bleed_h
+        crop_marks = [
+            (x_b, y_b),
+            (x_b + self.card_width, y_b),
+            (x_b, y_b + self.card_height),
+            (x_b + self.card_width, y_b + self.card_height),
+        ]
+
+        crop_mark_size = max(2, self.crop_mark_size)
+        crop_mark_half = crop_mark_size // 2
+        outline_width = max(2, self.crop_mark_size // 3)
+
+        for cx, cy in crop_marks:
+            for dx in range(-crop_mark_half, crop_mark_half):
+                for dy in range(-crop_mark_half, crop_mark_half):
+                    #Is pixel inside border
+                    if (
+                        abs(dx) >= crop_mark_half - outline_width or
+                        abs(dy) >= crop_mark_half - outline_width
+                    ):
+                        pixel_colour = (0, 0, 0)
+                    else:
+                        pixel_colour = (255, 255, 255)
+
+                    self.page.putpixel((cx + dx, cy + dy), pixel_colour)
+
     def add_image_to_page(self, card, is_back=False):
+        """Paste a card image onto the page at the correct size.
+
+        Args:
+            card (Card): Card object.
+            is_back (bool): True if adding the image of the back of the card.
+        """
         if is_back:
             image = Image.open(card.image_back)
         else:
@@ -117,6 +205,7 @@ class Page:
         else:
             keep_bleed = False
 
+        #Ensure correct cropping and sizing of cards
         if card.has_bleed:
             image = self.resize_image(image, keep_bleed=True)
             if not keep_bleed:
@@ -126,11 +215,12 @@ class Page:
             if keep_bleed:
                 image = self.add_bleed(image)
 
+        #Modify brightness of image
         enhancer = ImageEnhance.Brightness(image)
         image = enhancer.enhance(self.brightness_adjust)
 
-        self.colour_correct_image(image, (0, 0, 0,))
-
+        #x and y are the pixel positions on the page which define where the
+        #top left corner of the image will be placed.
         if keep_bleed:
             x = (
                 self.margin_w
@@ -148,6 +238,7 @@ class Page:
             x = self.margin_w + self.current_col * (self.card_width + self.spacing)
             y = self.margin_top + self.current_row * (self.card_height + self.spacing)
 
+        #Place card image onto page
         self.page.paste(image, (x, y))
 
         if keep_bleed:
@@ -163,55 +254,22 @@ class Page:
         if self.current_row >= self.rows:
             self.is_full = True
 
-    def add_crop_marks(self, x, y):
-        x_b = x + self.card_bleed_w
-        y_b = y + self.card_bleed_h
-        crop_marks = [
-            (x_b, y_b),
-            (x_b + self.card_width, y_b),
-            (x_b, y_b + self.card_height),
-            (x_b + self.card_width, y_b + self.card_height),
-        ]
-
-        crop_mark_size = max(2, self.crop_mark_size)
-        crop_mark_start = -int(crop_mark_size / 2)
-        crop_mark_end = int(crop_mark_size / 2)
-        outline_width = max(2, int(self.crop_mark_size / 3))
-
-        for crop_mark in crop_marks:
-            for i in range(crop_mark_start, crop_mark_end):
-                for j in range(crop_mark_start, crop_mark_end):
-                    if (
-                        i < crop_mark_start + outline_width
-                        or j < crop_mark_start + outline_width
-                        or i >= crop_mark_end - outline_width
-                        or j >= crop_mark_end - outline_width
-                    ):
-                        pixel_colour = (0, 0, 0)
-                    else:
-                        pixel_colour = (255, 255, 255)
-
-                    self.page.putpixel(
-                        (crop_mark[0] + i, crop_mark[1] + j), pixel_colour
-                    )
 
     def save_page(self, filename):
         self.page.save(filename)
 
-    def clear_page(self):
-        self.page = Image.new(
-            mode="RGB",
-            size=(self.page_width, self.page_height),
-            color=(255,255,255) #type: ignore
-        )
-        self.is_empty = True
-        self.is_full = False
-        self.has_back = False
-        self.current_row = 0
-        self.current_col = 0
 
 class Card:
+    """Container for card information, extracted from .xml file."""
     def __init__(self, card, back=None, instances=1):
+        """Initialise the card
+
+        Args:
+            card (ElementTree): xml object containing card information.
+            back (ElementTree or None): xml object containing information 
+                                        for the back of the card, if any.
+            instances (int): number of copies of this card.
+        """
         self.card = card
         self.instances = instances
 
@@ -219,6 +277,8 @@ class Card:
         self.image = self.find_card_images(self.id)
         self.name = self.card.find("name").text.title()
 
+        #Non MPCFill cards should be marked with an id made only of
+        #x. It is assumed that such a card has no bleed.
         if set(self.id) == set("x"):
             self.has_bleed = False
         else:
@@ -248,12 +308,20 @@ class Card:
             return self.name 
 
     def find_card_images(self, card_id):
+        """Find path to image based on the card id
+
+        Args:
+            card_id (str): The card's unique id.
+        """
         for card_image in os.listdir(IMAGE_PATH):
             if "Zone.Identifier" in card_image:
                 continue
 
             import re
 
+            #Regex: All characters within the last pair of brackets followed by a .
+            #BUG: Copies of a file in windows add a (#) before the extension. Regex picks that up instead of id.
+            
             try:
                 id = re.findall(r"\((?=[^\(]*$).*(?=\)\.)", card_image)[-1][1:]
             except IndexError:
@@ -265,6 +333,7 @@ class Card:
 
 
 def parse_args():
+    """Create and handle command-line arguments."""
     parser = argparse.ArgumentParser(description="Page Maker")
     parser.add_argument("-s", "--spacing", type=float, default=p.spacing_default)
     parser.add_argument("-b", "--bleed", type=float, default=p.bleed_default)
@@ -293,19 +362,31 @@ def parse_args():
 
 
 def convert_mm_to_pixels(card_width, mm):
+    """Converts from millimetres to pixels on the page. The card width is a known
+    quantity: mtg cards are 63mm wide. So we use it for conversion.
+    """
     pixels_per_mm = card_width / 63
     return int(mm * pixels_per_mm)
 
 
 def convert_pixels_to_mm(card_width, pixels):
+    """Converts from pixels on the page to millimetres. The card width is a known
+    quantity: mtg cards are 63mm wide. So we use it for conversion.
+    """
     mm_per_pixel = 63 / card_width
     return pixels * mm_per_pixel
 
-# Sometimes mpcfill misses an image download for some reason so this checks
-# if all of the images for the cards in the .xml are present. Raises an
-# exception with a list of missing cards if any.
 def check_all_cards_are_present():
+    """
+    Sometimes mpcfill misses an image download for some reason so this checks
+    if all of the images for the cards in the .xml are present. Raises an
+    exception with a list of missing cards if any.
+    """
+
     def card_compare(card_id):
+        """Return true if there is an image in the image folder matching card_id,
+        else false
+        """
         for image_name in os.listdir(IMAGE_PATH):
             if card_id in image_name:
                 return True
@@ -341,14 +422,23 @@ def check_all_cards_are_present():
         raise Exception(f"The following cards are missing: {not_found}")
 
 
-# Remove old pages.
 def clear_pages_folder():
+    """
+    Remove old pages from pages folder.
+    """
     pages = glob.glob(PAGE_PATH + "*")
     for i in pages:
         os.remove(i)
 
 
 def save_pages(page, back, name):
+    """Save pages with naming: (name).jpg or (name)_back.jpg
+
+    Args:
+        page (Page): Page object containing card fronts.
+        back (Page): Page object containing card backs
+        name (int): Page number, used for the name of the .jpg
+    """
     page.save_page(PAGE_PATH + f"/{name}.jpg")
 
     if page.has_back:
@@ -357,9 +447,15 @@ def save_pages(page, back, name):
     back.clear_page()
     page.clear_page()
 
-# Add card to page, also adds the backside of the card to a seperate
-# page if applicable, for double sided cards for example.
 def add_card(card, page, page_back):
+    """Adds card image to page, also add back side of card to a seperate
+    page, if applicable.
+
+    Args:
+        card (Card): Card object containing card information
+        page (Page): Page object containing card fronts
+        page_back (Page): Page object containing card backs
+    """
     print(f"Adding {card.card.find('query').text.title()}")
 
     if card.image is None:
@@ -380,6 +476,15 @@ def add_card(card, page, page_back):
 
 
 def create_cards(args):
+    """Finds card information from .xml file and creates a list of Card objects
+    from it.
+
+    Args:
+        args (ArgumentParser): Object containing command-line arguments.
+
+    Returns:
+        list[Card]: List of Card objects, each representing a unique card.
+    """
     with open(XML_PATH + "cards.xml") as f:
         root = ET.parse(f).getroot()
         cards = root.find("fronts")
@@ -415,6 +520,7 @@ def create_cards(args):
         else:
             card_objs.append(Card(card, instances=len(slots)))
 
+    #Optionally place all cards with backs first, minimising the number of 2-sided pages.
     if args.no_aggregate_backs:
         return card_objs
     else:
@@ -422,6 +528,13 @@ def create_cards(args):
 
 
 def batch_cards(cards, page):
+    """Creates a list containing a page's worth of cards. Useful for
+    determining whether the page should have a back side or not.
+
+    Args:
+        cards list[Card]: A list containing all cards not currently on a page
+        page (Page): Page object containing card fronts
+    """
     batch = []
     for card in cards:
         for _ in range(card.instances):
@@ -433,6 +546,15 @@ def batch_cards(cards, page):
     return batch
 
 def add_card_to_page(batch, cards, page, page_back):
+    """Adds cards in current batch to page, then removes the card
+    from the list, or decrements the number of copies.
+
+    Args:
+        batch list[Card]: A list containing one page worth of card objects.
+        cards list[Card]: A list containing all cards not currently on a page.
+        page (Page): Page object containing card fronts
+        page_back (Page): Page object containing card backs
+    """
     for card in batch:
         add_card(card, page, page_back)
         card.instances -= 1
@@ -442,6 +564,11 @@ def add_card_to_page(batch, cards, page, page_back):
 
 
 def create_pages(args):
+    """Creates pages and populates them with card images, then saves them as a jpg.
+
+    Args:
+        args (ArgumentParser): Object containing command-line arguments.
+    """
     page = Page(args)
     page_back = Page(args)
 
