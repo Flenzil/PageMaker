@@ -284,7 +284,7 @@ def parse_args():
     parser.add_argument(
         "--no-aggregate-backs",
         action=argparse.BooleanOptionalAction,
-        default=p.aggregate_backs_default,
+        default=p.no_aggregate_backs_default,
     )
     return parser.parse_args()
 
@@ -429,7 +429,7 @@ def create_cards(args):
     if args.no_aggregate_backs:
         return card_objs
     else:
-        return sorted(card_objs, key=lambda x: x.has_back)
+        return sorted(card_objs, key=lambda x: x.has_back, reverse=True)
 
 
 def batch_cards(cards, page):

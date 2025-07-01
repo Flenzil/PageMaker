@@ -28,7 +28,7 @@ card_widths = {
 
 # Add the generic magic back to each card
 card_backs_default = False
-aggregate_backs_default = True
+no_aggregate_backs_default = False
 
 # Dimension Ratios
 card_ratio = 1.3968
