@@ -25,9 +25,12 @@ class Page:
         self.crop_h = convert_mm_to_pixels(self.card_width, args.crop_height)
 
         self.crop_mark_size = convert_mm_to_pixels(self.card_width, args.crop_mark_size)
+        self.page_size = args.page_size
+        self.rows = p.rows[self.page_size]
+        self.columns = p.columns[self.page_size]
 
         self.page_width = convert_mm_to_pixels(
-            self.card_width, p.page_widths[args.page_size]
+            self.card_width, p.page_widths[self.page_size]
         )
         self.page_height = int(p.page_ratio * self.page_width)
 
@@ -35,8 +38,8 @@ class Page:
             0.5
             * (
                 self.page_width
-                - p.columns * self.card_width
-                - (p.columns - 1) * self.spacing
+                - self.columns * self.card_width
+                - (self.columns - 1) * self.spacing
             )
         )
 
@@ -44,8 +47,8 @@ class Page:
             0.5
             * (
                 self.page_height
-                - p.rows * self.card_height
-                - (p.rows - 1) * self.spacing
+                - self.rows * self.card_height
+                - (self.rows - 1) * self.spacing
             )
         )
 
@@ -135,13 +138,13 @@ class Page:
         if bleed:
             x = (
                 self.margin_w
-                - p.columns * self.card_bleed_w
+                - self.columns * self.card_bleed_w
                 + self.current_col
                 * (self.card_width + 2 * self.card_bleed_w + self.spacing)
             )
             y = (
                 self.margin_top
-                - p.rows * self.card_bleed_h
+                - self.rows * self.card_bleed_h
                 + self.current_row
                 * (self.card_height + 2 * self.card_bleed_h + self.spacing)
             )
@@ -156,11 +159,11 @@ class Page:
         self.is_empty = False
         self.current_col += 1
 
-        if self.current_col >= p.columns:
+        if self.current_col >= self.columns:
             self.current_col = 0
             self.current_row += 1
 
-        if self.current_row >= p.rows:
+        if self.current_row >= self.rows:
             self.is_full = True
 
     def add_crop_marks(self, x, y):
@@ -229,7 +232,6 @@ class Card:
                 self.id_back = self.back.text
                 self.name_back = "Card Back"
             self.image_back = self.find_card_images(self.id_back)
-            print(self.id_back)
         else:
             self.back = None
             self.id_back = None
@@ -387,7 +389,7 @@ def add_card(card, page, page_back):
         image_back = Image.open(card.image_back)
 
         page_back.current_row = page.current_row
-        page_back.current_col = p.columns - 1 - page.current_col
+        page_back.current_col = page.columns - 1 - page.current_col
 
         page.add_image_to_page(image, crop, bleed=bleed, add_bleed=add_bleed)
         page_back.add_image_to_page(image_back, crop, bleed=bleed, add_bleed=add_bleed)
@@ -432,15 +434,13 @@ def create_cards(args):
 
 def batch_cards(cards, page):
     batch = []
-    i = 0
     for card in cards:
         for _ in range(card.instances):
             batch.append(card)
             if card.has_back:
                 page.has_back = True
-            if i >= 8:
+            if len(batch) == page.rows * page.columns:
                 return batch
-            i += 1
     return batch
 
 def add_card_to_page(batch, cards, page, page_back):
