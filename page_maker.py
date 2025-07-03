@@ -619,9 +619,10 @@ def create_pages(args):
 
 
 def main():
+    args = parse_args()
     check_all_cards_are_present()
     clear_pages_folder()
-    create_pages(parse_args())
+    create_pages(args)
 
 
 if __name__ == "__main__":
