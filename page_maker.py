@@ -333,6 +333,8 @@ class Card:
         for card_image in os.listdir(IMAGE_PATH):
             if "Zone.Identifier" in card_image:
                 continue
+            if "put_card_images_here" in card_image:
+                continue
 
             import re
 
