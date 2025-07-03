@@ -5,6 +5,7 @@ card_width_low = int(card_width_high / 4)
 
 
 # Parameters in millimetres
+card_width_in_mm = 63
 spacing_default = 0.1
 bleed_default = 3.175 # MPCFill images have a 1/8" = 3.175mm bleed on all sides.
 crop_w_default = 3.175

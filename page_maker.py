@@ -384,7 +384,7 @@ def convert_mm_to_pixels(card_width, mm):
     """Converts from millimetres to pixels on the page. The card width is a known
     quantity: mtg cards are 63mm wide. So we use it for conversion.
     """
-    pixels_per_mm = card_width / 63
+    pixels_per_mm = card_width / p.card_width_in_mm
     return int(mm * pixels_per_mm)
 
 
@@ -392,7 +392,7 @@ def convert_pixels_to_mm(card_width, pixels):
     """Converts from pixels on the page to millimetres. The card width is a known
     quantity: mtg cards are 63mm wide. So we use it for conversion.
     """
-    mm_per_pixel = 63 / card_width
+    mm_per_pixel = p.card_width_in_mm / card_width
     return pixels * mm_per_pixel
 
 def check_all_cards_are_present():
