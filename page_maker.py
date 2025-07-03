@@ -217,7 +217,7 @@ class Page:
         else:
             image = Image.open(card.image)
 
-        if self.has_back:
+        if self.has_back or is_back:
             keep_bleed = True
         else:
             keep_bleed = False
