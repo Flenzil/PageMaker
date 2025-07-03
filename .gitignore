@@ -1,6 +1,9 @@
 venv/
 __pycache__/
 *.xml
+images/
+pages/
+xml/
 images/put_images_here
 pages/pages_will_go_here
 xml/put_xml_here

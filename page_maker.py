@@ -1,4 +1,5 @@
 import os
+import sys
 import glob
 import argparse
 from PIL import Image, ImageEnhance
@@ -64,16 +65,15 @@ class Page:
         self.brightness_adjust = args.brightness_adjust
 
         self.page_size = args.page_size.lower()
+        self.page_width = convert_mm_to_pixels(
+            self.card_width, p.get_page_widths(self.page_size)
+        )
+        self.page_height = int(p.page_ratio * self.page_width)
 
         #Number of rows and columns, set by the page size e.g a4 pages can hold 
         #3x3 mtg cards.
-        self.rows = p.rows[self.page_size]
-        self.columns = p.columns[self.page_size]
-
-        self.page_width = convert_mm_to_pixels(
-            self.card_width, p.page_widths[self.page_size]
-        )
-        self.page_height = int(p.page_ratio * self.page_width)
+        self.rows = self.page_width // (self.card_width + 2 * self.card_bleed_w + self.spacing)
+        self.columns = self.page_height // (self.card_height + 2 * self.card_bleed_h + self.spacing)
 
         #Margins around edge of page, derived by the negative space left by other
         #variables.
@@ -617,9 +617,22 @@ def create_pages(args):
         save_pages(page, page_back, page_count)
         print("Saved!")
 
+def handle_errors(args):
+    import re
+    if not re.match(r"^[abc]^\d$", args.page_size.lower()):
+        print(f"{args.page_size} page size not supported. Use A4, B3, C5 etc.")
+        sys.exit(1)
+
+    page_size_number = int(args.page_size[1:])
+    if (page_size_number > p.MAX_PAGE_SIZE_NUMBER
+        or page_size_number < p.MIN_PAGE_SIZE_NUMBER):
+        print("Page size too small! Try a larger page.")
+        sys.exit(1)
+
 
 def main():
     args = parse_args()
+    handle_errors(args)
     check_all_cards_are_present()
     clear_pages_folder()
     create_pages(args)
