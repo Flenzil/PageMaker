@@ -189,7 +189,7 @@ class Page:
 
         crop_mark_size = max(2, self.crop_mark_size)
         crop_mark_half = crop_mark_size // 2
-        outline_width = max(2, self.crop_mark_size // 3)
+        outline_width = max(2, self.crop_mark_size // 4)
 
         for cx, cy in crop_marks:
             for dx in range(-crop_mark_half, crop_mark_half):
