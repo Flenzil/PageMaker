@@ -63,7 +63,7 @@ class Page:
         #dark.
         self.brightness_adjust = args.brightness_adjust
 
-        self.page_size = args.page_size
+        self.page_size = args.page_size.lower()
 
         #Number of rows and columns, set by the page size e.g a4 pages can hold 
         #3x3 mtg cards.
