@@ -225,6 +225,12 @@ class Page:
                 width=outline_width
             )
 
+    def adjust_brightness(self, image):
+        """Adjust brightness of card image"""
+        enhancer = ImageEnhance.Brightness(image)
+        return enhancer.enhance(self.brightness_adjust)
+
+
     def add_image_to_page(self, card, is_back=False):
         """Paste a card image onto the page at the correct size.
 
@@ -253,8 +259,8 @@ class Page:
                 image = self.add_bleed(image)
 
         #Modify brightness of image
-        enhancer = ImageEnhance.Brightness(image)
-        image = enhancer.enhance(self.brightness_adjust)
+        if self.brightness_adjust != 1:
+            image = self.adjust_brightness(image)
 
         #x and y are the pixel positions on the page which define where the
         #top left corner of the image will be placed.
