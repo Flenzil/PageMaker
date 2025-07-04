@@ -36,12 +36,15 @@ class Page:
     manipulate the images (cropping, resizing etc.) and ensuring 
     that the cards print out to the right size. 
     """
-    def __init__(self, args):
+    def __init__(self, args, is_back=False):
         """Initialise the page.
             
         Args:
             args (Object): Command-line arguments from user.
+            is_back (bool): True if this page contains the back side of cards.
         """
+        self.is_back = is_back
+
         self.card_width = p.card_widths[args.quality]
         self.card_height = int(p.card_ratio * self.card_width)
 
@@ -78,10 +81,22 @@ class Page:
         )
         self.page_height = int(p.page_ratio * self.page_width)
 
+        #Reset page
+        self.clear_page()
+
+        #Find the number of rows and columns this page can hold
+        self.calculate_rows_and_cols()
+
+
+    def calculate_rows_and_cols(self):
         #Number of rows and columns, set by the page size e.g a4 pages can hold 
         #3x3 mtg cards.
-        self.columns = self.page_width // (self.card_width + 2 * self.card_bleed_w + self.spacing_x)
-        self.rows = self.page_height // (self.card_height + 2 * self.card_bleed_h + self.spacing_y)
+        if self.has_back or self.is_back:
+            self.columns = self.page_width // (self.card_width + 2 * self.card_bleed_w + self.spacing_x)
+            self.rows = self.page_height // (self.card_height + 2 * self.card_bleed_h + self.spacing_y)
+        else:
+            self.columns = self.page_width // (self.card_width + self.spacing_x)
+            self.rows = self.page_height // (self.card_height + self.spacing_y)
 
         #Margins around edge of page, derived by the negative space left by other
         #variables.
@@ -105,9 +120,6 @@ class Page:
         )
         self.margin_w = max(p.margin_w_min, self.margin_w)
 
-        #Reset page
-        self.clear_page()
-
     def clear_page(self):
         """Create empty page and reset associated variables"""
         self.page = Image.new(
@@ -118,6 +130,7 @@ class Page:
         self.is_empty = True
         self.is_full = False
         self.has_back = False
+        self.calculate_rows_and_cols()
         self.current_row = 0
         self.current_col = 0
 
@@ -552,6 +565,7 @@ def create_cards(args):
         else:
             card_objs.append(Card(card, instances=len(slots)))
 
+
     #Optionally place all cards with backs first, minimising the number of 2-sided pages.
     if args.no_aggregate_backs:
         return card_objs
@@ -573,6 +587,9 @@ def batch_cards(cards, page):
             batch.append(card)
             if card.has_back:
                 page.has_back = True
+                page.calculate_rows_and_cols()
+            if len(batch) > page.rows * page.columns:
+                return batch[:page.rows * page.columns - 1]
             if len(batch) == page.rows * page.columns:
                 return batch
     return batch
@@ -602,7 +619,7 @@ def create_pages(args):
         args (ArgumentParser): Object containing command-line arguments.
     """
     page = Page(args)
-    page_back = Page(args)
+    page_back = Page(args, is_back=True)
 
     page_count = 1
 
