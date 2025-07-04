@@ -555,10 +555,11 @@ def create_cards(args):
             if slots & slots_back:
                 card_objs.append(Card(card, back=back, instances=len(slots)))
                 break
+        else:
             if args.card_backs:
                 card_objs.append(Card(card, back=generic_card_back, instances=len(slots)))
-        else:
-            card_objs.append(Card(card, instances=len(slots)))
+            else:
+                card_objs.append(Card(card, instances=len(slots)))
 
 
     #Place all cards with backs first, minimising the number of 2-sided pages.
