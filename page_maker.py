@@ -445,6 +445,7 @@ def clear_pages_folder():
     """
     Remove old pages from pages folder.
     """
+    os.makedirs(PAGE_PATH, exist_ok=True)
     pages = glob.glob(PAGE_PATH + "*")
     for i in pages:
         os.remove(i)
