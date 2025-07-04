@@ -72,8 +72,8 @@ class Page:
 
         #Number of rows and columns, set by the page size e.g a4 pages can hold 
         #3x3 mtg cards.
-        self.rows = self.page_width // (self.card_width + 2 * self.card_bleed_w + self.spacing)
-        self.columns = self.page_height // (self.card_height + 2 * self.card_bleed_h + self.spacing)
+        self.columns = self.page_width // (self.card_width + 2 * self.card_bleed_w + self.spacing_x)
+        self.rows = self.page_height // (self.card_height + 2 * self.card_bleed_h + self.spacing_y)
 
         #Margins around edge of page, derived by the negative space left by other
         #variables.
