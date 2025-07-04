@@ -2,7 +2,7 @@ import os
 import sys
 import glob
 import argparse
-from PIL import Image, ImageEnhance
+from PIL import Image, ImageEnhance, ImageDraw
 import xml.etree.ElementTree as ET
 
 import params as p
@@ -201,6 +201,7 @@ class Page:
             x (int): x pixel position of top left corner of card
             y (int): y pixel position of top left corner of card
         """
+
         x_b = x + self.card_bleed_w
         y_b = y + self.card_bleed_h
         crop_marks = [
@@ -211,9 +212,19 @@ class Page:
         ]
 
         crop_mark_size = max(2, self.crop_mark_size)
-        crop_mark_half = crop_mark_size // 2
         outline_width = max(2, self.crop_mark_size // 4)
 
+        draw = ImageDraw.Draw(self.page)
+        ch = crop_mark_size // 2
+
+        for cx, cy in crop_marks:
+            draw.rectangle([cx - ch, cy - ch, cx + ch, cy + ch],
+                           fill="white",
+                           outline="black",
+                           width=outline_width
+                           )
+
+        '''
         for cx, cy in crop_marks:
             for dx in range(-crop_mark_half, crop_mark_half):
                 for dy in range(-crop_mark_half, crop_mark_half):
@@ -227,6 +238,7 @@ class Page:
                         pixel_colour = (255, 255, 255)
 
                     self.page.putpixel((cx + dx, cy + dy), pixel_colour)
+        '''
 
     def add_image_to_page(self, card, is_back=False):
         """Paste a card image onto the page at the correct size.
