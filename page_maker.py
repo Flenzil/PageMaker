@@ -46,7 +46,15 @@ class Page:
         self.card_height = int(p.card_ratio * self.card_width)
 
         #Space between cards.
-        self.spacing = convert_mm_to_pixels(self.card_width, args.spacing)
+        if args.spacing_x is None:
+            self.spacing_x = convert_mm_to_pixels(self.card_width, args.spacing)
+        else:
+            self.spacing_x = convert_mm_to_pixels(self.card_width, args.spacing_x)
+        if args.spacing_y is None:
+            self.spacing_y = convert_mm_to_pixels(self.card_width, args.spacing)
+        else:
+            self.spacing_y = convert_mm_to_pixels(self.card_width, args.spacing_y)
+
 
         #Bleed around cards, either added by MPCFill or added later to help
         #decrease visibility of misalignment on two sided cards.
@@ -82,7 +90,7 @@ class Page:
             * (
                 self.page_width
                 - self.columns * self.card_width
-                - (self.columns - 1) * self.spacing
+                - (self.columns - 1) * self.spacing_x
             )
         )
         self.margin_w = max(p.margin_w_min, self.margin_w)
@@ -92,10 +100,10 @@ class Page:
             * (
                 self.page_height
                 - self.rows * self.card_height
-                - (self.rows - 1) * self.spacing
+                - (self.rows - 1) * self.spacing_y
             )
         )
-        self.margin_h = max(p.margin_h_min, self.margin_top)
+        self.margin_w = max(p.margin_w_min, self.margin_w)
 
         #Reset page
         self.clear_page()
@@ -245,17 +253,17 @@ class Page:
                 self.margin_w
                 - self.columns * self.card_bleed_w
                 + self.current_col
-                * (self.card_width + 2 * self.card_bleed_w + self.spacing)
+                * (self.card_width + 2 * self.card_bleed_w + self.spacing_x)
             )
             y = (
                 self.margin_top
                 - self.rows * self.card_bleed_h
                 + self.current_row
-                * (self.card_height + 2 * self.card_bleed_h + self.spacing)
+                * (self.card_height + 2 * self.card_bleed_h + self.spacing_y)
             )
         else:
-            x = self.margin_w + self.current_col * (self.card_width + self.spacing)
-            y = self.margin_top + self.current_row * (self.card_height + self.spacing)
+            x = self.margin_w + self.current_col * (self.card_width + self.spacing_x)
+            y = self.margin_top + self.current_row * (self.card_height + self.spacing_y)
 
         #Place card image onto page
         self.page.paste(image, (x, y))
@@ -357,6 +365,8 @@ def parse_args():
     """Create and handle command-line arguments."""
     parser = argparse.ArgumentParser(description="Page Maker")
     parser.add_argument("-s", "--spacing", type=float, default=p.spacing_default)
+    parser.add_argument("-sx", "--spacing-x", type=float, default=None)
+    parser.add_argument("-sy", "--spacing-y", type=float, default=None)
     parser.add_argument("-b", "--bleed", type=float, default=p.bleed_default)
     parser.add_argument("-p", "--page-size", default=p.page_size_default)
     parser.add_argument("-ch", "--crop-height", type=float, default=p.crop_h_default)
