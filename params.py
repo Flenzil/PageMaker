@@ -33,7 +33,7 @@ card_ratio = 1.3968
 page_ratio = 1.4142135623730  # sqrt(2)
 
 MAX_PAGE_SIZE_NUMBER = 7
-MAX_PAGE_SIZE_NUMBER = 0
+MIN_PAGE_SIZE_NUMBER = 0
 
 
 def get_page_widths(page_size):
