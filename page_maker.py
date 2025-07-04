@@ -397,11 +397,6 @@ def parse_args():
         type=float,
         default=p.crop_mark_size_default
     )
-    parser.add_argument(
-        "--no-aggregate-backs",
-        action=argparse.BooleanOptionalAction,
-        default=p.no_aggregate_backs_default,
-    )
     return parser.parse_args()
 
 
@@ -566,11 +561,8 @@ def create_cards(args):
             card_objs.append(Card(card, instances=len(slots)))
 
 
-    #Optionally place all cards with backs first, minimising the number of 2-sided pages.
-    if args.no_aggregate_backs:
-        return card_objs
-    else:
-        return sorted(card_objs, key=lambda x: x.has_back, reverse=True)
+    #Place all cards with backs first, minimising the number of 2-sided pages.
+    return sorted(card_objs, key=lambda x: x.has_back, reverse=True)
 
 
 def batch_cards(cards, page):
@@ -588,10 +580,8 @@ def batch_cards(cards, page):
             if card.has_back:
                 page.has_back = True
                 page.calculate_rows_and_cols()
-            if len(batch) > page.rows * page.columns:
-                return batch[:page.rows * page.columns - 1]
-            if len(batch) == page.rows * page.columns:
-                return batch
+            if len(batch) >= page.rows * page.columns:
+                return batch[:page.rows * page.columns]
     return batch
 
 def add_card_to_page(batch, cards, page, page_back):
