@@ -85,6 +85,7 @@ class Page:
                 - (self.columns - 1) * self.spacing
             )
         )
+        self.margin_w = max(p.margin_w_min, self.margin_w)
 
         self.margin_top = int(
             0.5
@@ -94,6 +95,7 @@ class Page:
                 - (self.rows - 1) * self.spacing
             )
         )
+        self.margin_h = max(p.margin_h_min, self.margin_top)
 
         #Reset page
         self.clear_page()
