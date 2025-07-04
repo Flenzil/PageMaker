@@ -619,7 +619,7 @@ def create_pages(args):
 
 def handle_errors(args):
     import re
-    if not re.match(r"^[abc]^\d$", args.page_size.lower()):
+    if not re.match(r"^[abc]{1}\d{1}$", args.page_size.lower()):
         print(f"{args.page_size} page size not supported. Use A4, B3, C5 etc.")
         sys.exit(1)
 
