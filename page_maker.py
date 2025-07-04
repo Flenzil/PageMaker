@@ -384,8 +384,8 @@ def parse_args():
     parser.add_argument("-p", "--page-size", default=p.page_size_default)
     parser.add_argument("-ch", "--crop-height", type=float, default=p.crop_h_default)
     parser.add_argument("-cw", "--crop-width", type=float, default=p.crop_w_default)
-    parser.add_argument("--card-backs", type=bool, default=p.card_backs_default)
     parser.add_argument("--brightness-adjust", type=float, default=p.brightness_adjust_default)
+    parser.add_argument("--card-backs", action="store_true", default=p.card_backs_default)
 
     parser.add_argument(
         "-q", "--quality",
