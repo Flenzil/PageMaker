@@ -84,11 +84,10 @@ class Page:
         #Reset page
         self.clear_page()
 
-        #Find the number of rows and columns this page can hold
-        self.calculate_rows_and_cols()
-
-
     def calculate_rows_and_cols(self):
+        """Find the maximum number of rows and columns this page can contain and
+        then calculate the margins
+        """
         #Number of rows and columns, set by the page size e.g a4 pages can hold 
         #3x3 mtg cards.
         if self.has_back or self.is_back:
