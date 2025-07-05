@@ -64,6 +64,12 @@ class Page:
         self.card_bleed_w = convert_mm_to_pixels(self.card_width, args.bleed)
         self.card_bleed_h = int(self.card_bleed_w)
 
+        #Supress adding bleed to cards with backs
+        self.no_bleed = args.no_bleed
+
+        #Add bleed to every page
+        self.always_bleed = args.always_bleed
+
         #Amount to crop the cards, default is equal to bleed.
         self.crop_w = convert_mm_to_pixels(self.card_width, args.crop_width)
         self.crop_h = convert_mm_to_pixels(self.card_width, args.crop_height)
@@ -75,8 +81,6 @@ class Page:
         #dark.
         self.brightness_adjust = args.brightness_adjust
 
-        #Supress adding bleed to cards with backs
-        self.no_bleed = args.no_bleed
 
         self.page_size = args.page_size.lower()
         self.page_width = convert_mm_to_pixels(
@@ -93,7 +97,7 @@ class Page:
         """
         #Number of rows and columns, set by the page size e.g a4 pages can hold 
         #3x3 mtg cards.
-        if not self.no_bleed and (self.has_back or self.is_back):
+        if not self.no_bleed and (self.has_back or self.is_back) or self.always_bleed:
             self.columns = self.page_width // (self.card_width + 2 * self.card_bleed_w + self.spacing_x)
             self.rows = self.page_height // (self.card_height + 2 * self.card_bleed_h + self.spacing_y)
         else:
@@ -246,7 +250,7 @@ class Page:
         else:
             image = Image.open(card.image)
 
-        if not self.no_bleed and (self.has_back or is_back):
+        if not self.no_bleed and (self.has_back or is_back) or self.always_bleed:
             keep_bleed = True
         else:
             keep_bleed = False
@@ -369,6 +373,7 @@ def parse_args():
     parser.add_argument("--brightness-adjust", type=float, default=p.brightness_adjust_default)
     parser.add_argument("--card-backs", action="store_true", default=p.card_backs_default)
     parser.add_argument("--no-bleed", action="store_true", default=p.no_bleed_default)
+    parser.add_argument("--always-bleed", action="store_true", default=p.always_bleed_default)
 
     parser.add_argument(
         "-q", "--quality",
@@ -660,6 +665,10 @@ def handle_errors(args):
     if (page_size_number > p.MAX_PAGE_SIZE_NUMBER
         or page_size_number < p.MIN_PAGE_SIZE_NUMBER):
         print("Page size too small! Try a larger page.")
+        sys.exit(1)
+
+    if args.always_bleed and args.no_bleed:
+        print("--always-bleed and --no-bleed are mutually exclusive")
         sys.exit(1)
 
 

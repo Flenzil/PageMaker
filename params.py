@@ -33,6 +33,9 @@ no_aggregate_backs_default = False
 #Never add bleed
 no_bleed_default = False
 
+#Always add bleed
+always_bleed_default = False
+
 # Dimension Ratios
 card_ratio = 1.3968
 page_ratio = 1.4142135623730  # sqrt(2)
