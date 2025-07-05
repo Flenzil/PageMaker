@@ -304,20 +304,22 @@ class Page:
 
 class Card:
     """Container for card information, extracted from .xml file."""
-    def __init__(self, card, back=None, instances=1):
+    def __init__(self, card, id_image_map, back=None, instances=1):
         """Initialise the card
 
         Args:
             card (ElementTree): xml object containing card information.
+            id_image_map (dict): map of card id : image path
             back (ElementTree or None): xml object containing information 
                                         for the back of the card, if any.
             instances (int): number of copies of this card.
         """
         self.card = card
         self.instances = instances
+        self.id_image_map = id_image_map
 
         self.id = self.card.find("id").text
-        self.image = self.find_card_images(self.id)
+        self.image = self.id_image_map.get(self.id)
         self.name = self.card.find("name").text.title()
 
         #Non MPCFill cards should be marked with an id made only of
@@ -336,7 +338,7 @@ class Card:
             except AttributeError:
                 self.id_back = self.back.text
                 self.name_back = "Card Back"
-            self.image_back = self.find_card_images(self.id_back)
+            self.image_back = self.id_image_map.get(self.id_back)
         else:
             self.back = None
             self.id_back = None
@@ -349,32 +351,6 @@ class Card:
             return f"{self.name} // {self.name_back}"
         else:
             return self.name 
-
-    def find_card_images(self, card_id):
-        """Find path to image based on the card id
-
-        Args:
-            card_id (str): The card's unique id.
-        """
-        for card_image in os.listdir(IMAGE_PATH):
-            if "Zone.Identifier" in card_image:
-                continue
-            if "put_card_images_here" in card_image:
-                continue
-
-            import re
-
-            #Regex: All characters within the last pair of brackets followed by a .
-            #BUG: Copies of a file in windows add a (#) before the extension. Regex picks that up instead of id.
-            
-            try:
-                id = re.findall(r"\((?=[^\(]*$).*(?=\)\.)", card_image)[-1][1:]
-            except IndexError:
-                raise Exception(f"{self.name} or {self.name_back} not found!")
-
-            if id == card_id:
-                return IMAGE_PATH + card_image
-
 
 
 def parse_args():
@@ -517,6 +493,33 @@ def add_card(card, page, page_back):
         page.add_image_to_page(card)
         page_back.add_image_to_page(card, is_back=True)
 
+def create_id_image_map(cards):
+    """Create a mapping of card id to image path
+
+    Args:
+        cards list[ElementTree] : List of card xml objects.
+    """
+    import re
+    id_image_map = {}
+    for card in cards:
+        card_id = card.find("id").text
+        for card_image in os.listdir(IMAGE_PATH):
+            if "Zone.Identifier" in card_image:
+                continue
+            if "put_card_images_here" in card_image:
+                continue
+
+            #Regex: All characters within the last pair of brackets followed by a .
+            #BUG: Copies of a file in windows add a (#) before the extension. Regex picks that up instead of id.
+            
+            try:
+                id = re.findall(r"\((?=[^\(]*$).*(?=\)\.)", card_image)[-1][1:]
+                if id == card_id:
+                    id_image_map[card_id] = os.path.join(IMAGE_PATH, card_image)
+                    break
+            except IndexError:
+                raise Exception(f"{card.find('query').text.lower()} not found!")
+    return id_image_map
 
 def create_cards(args):
     """Finds card information from .xml file and creates a list of Card objects
@@ -539,6 +542,8 @@ def create_cards(args):
     if backs is None:
         backs = []
 
+    id_image_map = create_id_image_map(cards) | create_id_image_map(backs)
+
     card_objs = []
 
     slots_back_map = []
@@ -556,13 +561,13 @@ def create_cards(args):
 
         for back, slots_back in slots_back_map:
             if slots & slots_back:
-                card_objs.append(Card(card, back=back, instances=len(slots)))
+                card_objs.append(Card(card, id_image_map, back=back, instances=len(slots)))
                 break
         else:
             if args.card_backs:
-                card_objs.append(Card(card, back=generic_card_back, instances=len(slots)))
+                card_objs.append(Card(card, id_image_map, back=generic_card_back, instances=len(slots)))
             else:
-                card_objs.append(Card(card, instances=len(slots)))
+                card_objs.append(Card(card, id_image_map, instances=len(slots)))
 
 
     #Place all cards with backs first, minimising the number of 2-sided pages.
