@@ -385,8 +385,27 @@ def parse_args():
         type=float,
         default=p.crop_mark_size_default
     )
-    return parser.parse_args()
 
+    args = parser.parse_args()
+    handle_errors(args)
+
+    return args
+
+def handle_errors(args):
+    import re
+    if not re.match(r"^[abc]{1}\d{1}$", args.page_size.lower()):
+        print(f"{args.page_size} page size not supported. Use A4, B3, C5 etc.")
+        sys.exit(1)
+
+    page_size_number = int(args.page_size[1:])
+    if (page_size_number > p.MAX_PAGE_SIZE_NUMBER
+        or page_size_number < p.MIN_PAGE_SIZE_NUMBER):
+        print("Page size too small! Try a larger page.")
+        sys.exit(1)
+
+    if args.always_bleed and args.no_bleed:
+        print("--always-bleed and --no-bleed are mutually exclusive")
+        sys.exit(1)
 
 def convert_mm_to_pixels(card_width, mm):
     """Converts from millimetres to pixels on the page. The card width is a known
@@ -655,26 +674,10 @@ def create_pages(args):
         save_pages(page, page_back, page_count)
         print("Saved!")
 
-def handle_errors(args):
-    import re
-    if not re.match(r"^[abc]{1}\d{1}$", args.page_size.lower()):
-        print(f"{args.page_size} page size not supported. Use A4, B3, C5 etc.")
-        sys.exit(1)
-
-    page_size_number = int(args.page_size[1:])
-    if (page_size_number > p.MAX_PAGE_SIZE_NUMBER
-        or page_size_number < p.MIN_PAGE_SIZE_NUMBER):
-        print("Page size too small! Try a larger page.")
-        sys.exit(1)
-
-    if args.always_bleed and args.no_bleed:
-        print("--always-bleed and --no-bleed are mutually exclusive")
-        sys.exit(1)
 
 
 def main():
     args = parse_args()
-    handle_errors(args)
     check_all_cards_are_present()
     clear_pages_folder()
     create_pages(args)
