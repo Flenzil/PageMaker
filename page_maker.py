@@ -75,6 +75,9 @@ class Page:
         #dark.
         self.brightness_adjust = args.brightness_adjust
 
+        #Supress adding bleed to cards with backs
+        self.no_bleed = args.no_bleed
+
         self.page_size = args.page_size.lower()
         self.page_width = convert_mm_to_pixels(
             self.card_width, p.get_page_widths(self.page_size)
@@ -90,7 +93,7 @@ class Page:
         """
         #Number of rows and columns, set by the page size e.g a4 pages can hold 
         #3x3 mtg cards.
-        if self.has_back or self.is_back:
+        if not self.no_bleed and (self.has_back or self.is_back):
             self.columns = self.page_width // (self.card_width + 2 * self.card_bleed_w + self.spacing_x)
             self.rows = self.page_height // (self.card_height + 2 * self.card_bleed_h + self.spacing_y)
         else:
@@ -243,7 +246,7 @@ class Page:
         else:
             image = Image.open(card.image)
 
-        if self.has_back or is_back:
+        if not self.no_bleed and (self.has_back or is_back):
             keep_bleed = True
         else:
             keep_bleed = False
@@ -365,6 +368,7 @@ def parse_args():
     parser.add_argument("-cw", "--crop-width", type=float, default=p.crop_w_default)
     parser.add_argument("--brightness-adjust", type=float, default=p.brightness_adjust_default)
     parser.add_argument("--card-backs", action="store_true", default=p.card_backs_default)
+    parser.add_argument("--no-bleed", action="store_true", default=p.no_bleed_default)
 
     parser.add_argument(
         "-q", "--quality",
