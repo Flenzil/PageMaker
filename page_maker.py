@@ -438,7 +438,7 @@ def check_all_cards_are_present():
                 return True
         return False
 
-    with open(XML_PATH + "cards.xml") as f:
+    with open(os.path.join(XML_PATH, "cards.xml")) as f:
         root = ET.parse(f).getroot()
         cards = root.find("fronts")
 
@@ -473,7 +473,7 @@ def clear_pages_folder():
     Remove old pages from pages folder.
     """
     os.makedirs(PAGE_PATH, exist_ok=True)
-    pages = glob.glob(PAGE_PATH + "*")
+    pages = glob.glob(os.path.join(PAGE_PATH, "*"))
     for i in pages:
         os.remove(i)
 
@@ -486,10 +486,10 @@ def save_pages(page, back, name):
         back (Page): Page object containing card backs
         name (int): Page number, used for the name of the .jpg
     """
-    page.save_page(PAGE_PATH + f"/{name}.jpg")
+    page.save_page(os.path.join(PAGE_PATH, f"{name}.jpg"))
 
     if page.has_back:
-        back.save_page(PAGE_PATH + f"/{name}_back.jpg")
+        back.save_page(os.path.join(PAGE_PATH, f"{name}_back.jpg"))
 
     back.clear_page()
     page.clear_page()
@@ -559,7 +559,7 @@ def create_cards(args):
     Returns:
         list[Card]: List of Card objects, each representing a unique card.
     """
-    with open(XML_PATH + "cards.xml") as f:
+    with open(os.path.join(XML_PATH, "cards.xml")) as f:
         root = ET.parse(f).getroot()
         cards = root.find("fronts")
         backs = root.find("backs")
