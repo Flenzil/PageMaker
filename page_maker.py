@@ -61,8 +61,17 @@ class Page:
 
         #Bleed around cards, either added by MPCFill or added later to help
         #decrease visibility of misalignment on two sided cards.
-        self.card_bleed_w = convert_mm_to_pixels(self.card_width, args.bleed)
-        self.card_bleed_h = int(self.card_bleed_w)
+        if args.bleed_x is None:
+            self.card_bleed_w = convert_mm_to_pixels(self.card_width, args.bleed)
+        else:
+            self.card_bleed_w = convert_mm_to_pixels(self.card_width, args.bleed_x)
+
+        if args.bleed_y is None:
+            self.card_bleed_h = convert_mm_to_pixels(self.card_width, args.bleed)
+        else:
+            self.card_bleed_h = convert_mm_to_pixels(self.card_width, args.bleed_y)
+
+        self.mpcfill_bleed = convert_mm_to_pixels(self.card_width, p.mpcfill_bleed)
 
         #Supress adding bleed to cards with backs
         self.no_bleed = args.no_bleed
@@ -71,8 +80,8 @@ class Page:
         self.always_bleed = args.always_bleed
 
         #Amount to crop the cards, default is equal to bleed.
-        self.crop_w = convert_mm_to_pixels(self.card_width, args.crop_width)
-        self.crop_h = convert_mm_to_pixels(self.card_width, args.crop_height)
+        self.crop_w = self.mpcfill_bleed - self.card_bleed_w
+        self.crop_h = self.mpcfill_bleed - self.card_bleed_h
 
         #Size of crop marks added to aid with cutting on cards with preserved bleed
         self.crop_mark_size = convert_mm_to_pixels(self.card_width, args.crop_mark_size)
@@ -140,7 +149,7 @@ class Page:
         self.current_row = 0
         self.current_col = 0
 
-    def resize_image(self, image, keep_bleed=False):
+    def resize_image(self, image, has_bleed=False):
         """Resizes images to the predefined card width so 
         that the cards are the right size when printing. 
         Can optionally allow the cards to keep the bleed that
@@ -151,52 +160,42 @@ class Page:
             keep_bleed (bool): resize card to correct size plus
                                the bleed around the edges 
         """
-        if keep_bleed:
+        if has_bleed:
             return image.resize(
                 (
-                    self.card_width + 2 * self.card_bleed_w,
-                    self.card_height + 2 * self.card_bleed_h,
+                    self.card_width + 2 * self.mpcfill_bleed,
+                    self.card_height + 2 * self.mpcfill_bleed,
                 )
             )
         else:
             return image.resize((self.card_width, self.card_height))
 
-    def crop_image(self, image):
+    def crop_image(self, image, keep_bleed=False, has_bleed=True):
         """Crops the bleed that MPCFill adds to cards
 
         Args:
             image (PIL.Image): image of card
+            keep_bleed (bool): True if we want the card to have bleed preserved
+            has_bleed (bool): True if the card already has bleed in the image
         """
-        left = self.crop_w
-        right = self.card_width + 2 * self.card_bleed_w - self.crop_w
-        upper = self.crop_h
-        lower = self.card_height + 2 * self.card_bleed_h - self.crop_h
+        if keep_bleed and has_bleed:
+            left = self.crop_w
+            right = self.card_width + 2 * self.mpcfill_bleed - self.crop_w
+            upper = self.crop_h
+            lower = self.card_height + 2 * self.mpcfill_bleed - self.crop_h
+        if keep_bleed and not has_bleed:
+            left = -self.card_bleed_w
+            right = self.card_width + self.card_bleed_w
+            upper = -self.card_bleed_h
+            lower = self.card_height + self.card_bleed_h
+        if not keep_bleed and has_bleed:
+            left = self.mpcfill_bleed
+            right = self.card_width + self.mpcfill_bleed
+            upper = self.mpcfill_bleed
+            lower = self.card_height + self.mpcfill_bleed
+            
         return image.crop((left, upper, right, lower))
     
-    def add_bleed(self, image):
-        """Non-MPCFill cards might not have the bleed but we want to
-        have bleed on pages that have a back side (for double-sided
-        cards and to allow for misalignment in prints) so we add the 
-        bleed here.
-
-        Args:
-            image (PIL.Image): image of card
-        """
-        border = Image.new(
-            mode="RGB",
-            size=(
-                self.card_width + 2 * self.card_bleed_w,
-                self.card_height + 2 * self.card_bleed_h,
-            ),
-            color=(0,0,0), #type: ignore
-        )
-        border.paste(
-            image,
-            (self.card_bleed_w, self.card_bleed_h),
-        )
-
-        return border
-
     def add_crop_marks(self, x, y):
         """Add visual crop marks to guide cutting when bleed is present.
         
@@ -255,15 +254,10 @@ class Page:
         else:
             keep_bleed = False
 
-        #Ensure correct cropping and sizing of cards
-        if card.has_bleed:
-            image = self.resize_image(image, keep_bleed=True)
-            if not keep_bleed:
-                image = self.crop_image(image)
-        else:
-            image = self.resize_image(image)
-            if keep_bleed:
-                image = self.add_bleed(image)
+        #Resize and crop card image
+        image = self.resize_image(image, has_bleed=card.has_bleed)
+        if card.has_bleed or keep_bleed:
+            image = self.crop_image(image, keep_bleed=keep_bleed, has_bleed=card.has_bleed)
 
         #Modify brightness of image
         if self.brightness_adjust != 1:
@@ -367,9 +361,9 @@ def parse_args():
     parser.add_argument("-sx", "--spacing-x", type=float, default=None)
     parser.add_argument("-sy", "--spacing-y", type=float, default=None)
     parser.add_argument("-b", "--bleed", type=float, default=p.bleed_default)
+    parser.add_argument("-bx", "--bleed_x", type=float, default=None)
+    parser.add_argument("-by", "--bleed_y", type=float, default=None)
     parser.add_argument("-p", "--page-size", default=p.page_size_default)
-    parser.add_argument("-ch", "--crop-height", type=float, default=p.crop_h_default)
-    parser.add_argument("-cw", "--crop-width", type=float, default=p.crop_w_default)
     parser.add_argument("--brightness-adjust", type=float, default=p.brightness_adjust_default)
     parser.add_argument("--card-backs", action="store_true", default=p.card_backs_default)
     parser.add_argument("--no-bleed", action="store_true", default=p.no_bleed_default)
@@ -406,6 +400,25 @@ def handle_errors(args):
     if args.always_bleed and args.no_bleed:
         print("--always-bleed and --no-bleed are mutually exclusive")
         sys.exit(1)
+
+    if (args.bleed < 0 or
+        (args.bleed_x is not None and args.bleed_x < 0) or 
+        (args.bleed_y is not None and args.bleed_y < 0)):
+        print("Bleed cannot be negative.")
+        sys.exit(1)
+
+    if (args.no_bleed and 
+        (args.bleed != p.bleed_default or
+        args.bleed_x is not None or 
+        args.bleed_y is not None)):
+        print("#######################################################################################")
+        print("WARNING: Bleed is specified but --no-bleed is set to True. Bleed value will be ignored.")
+        print("#######################################################################################")
+
+    if args.always_bleed and args.bleed == 0:
+        print("#######################################################################################")
+        print("--always-bleed is True but bleed is set to 0. Consider using --no_bleed")
+        print("#######################################################################################")
 
 def convert_mm_to_pixels(card_width, mm):
     """Converts from millimetres to pixels on the page. The card width is a known

@@ -7,13 +7,13 @@ card_width_low = int(card_width_high / 4)
 # Parameters in millimetres
 card_width_in_mm = 63
 spacing_default = 0.1
-bleed_default = 3.175 # MPCFill images have a 1/8" = 3.175mm bleed on all sides.
-crop_w_default = 3.175
-crop_h_default = 3.175
+bleed_default = 3.175
 margin_w_min = 1
 margin_h_min = 1
 crop_mark_size_default = 0.75
 crop_mark_border_size_default = 0.2
+
+mpcfill_bleed = 3.175 # MPCFill images have a 1/8" = 3.175mm bleed on all sides.
 
 page_size_default = "a4"
 brightness_adjust_default = 1.0
