@@ -7,13 +7,15 @@ import glob
 import argparse
 import PIL
 from PIL import Image, ImageEnhance, ImageDraw
+from pathlib import Path
 import xml.etree.ElementTree as ET
 
 import params as p
 
-IMAGE_PATH = "../data/images/"
-PAGE_PATH = "../pages/"
-XML_PATH = "../data/xml/"
+ROOT = Path(__file__).resolve().parent.parent
+IMAGE_PATH = ROOT / "data/images/"
+PAGE_PATH = ROOT / "pages/"
+XML_PATH = ROOT / "data/xml/"
 
 """
 A Python script for placing Magic: The Gathering card images onto printable pages.
