@@ -11,9 +11,9 @@ import xml.etree.ElementTree as ET
 
 import params as p
 
-IMAGE_PATH = "./images/"
-PAGE_PATH = "./pages/"
-XML_PATH = "./xml/"
+IMAGE_PATH = "../data/images/"
+PAGE_PATH = "../pages/"
+XML_PATH = "../data/xml/"
 
 """
 A Python script for placing Magic: The Gathering card images onto printable pages.
@@ -400,7 +400,7 @@ class Card:
 
 
 
-def parse_args():
+def parse_args(argv=None):
     """Create and handle command-line arguments."""
     parser = argparse.ArgumentParser(description="Page Maker")
     parser.add_argument("-s", "--spacing", type=float, default=p.spacing_default)
@@ -426,7 +426,7 @@ def parse_args():
         default=p.crop_mark_size_default
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     handle_errors(args)
 
     return args
@@ -698,7 +698,7 @@ def create_pages(args, cards):
             print()
 
             page_count += 1
-        
+
         batch = batch_cards(cards, page)
 
     if not page.is_empty:
@@ -707,8 +707,8 @@ def create_pages(args, cards):
         print("Saved!")
 
 
-def main():
-    args = parse_args()
+def main(argv=None):
+    args = parse_args(argv=argv)
     id_image_map = create_id_image_map()
     delete_removed_cards(id_image_map)
     clear_pages_folder()
