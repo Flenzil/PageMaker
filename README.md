@@ -6,6 +6,7 @@ PageMaker is a Python script that formats MTG cards into printable pages. Design
 - Automatically download card images from `.xml` data.
 - Automatically arranges cards into a grid on standard paper sizes (e.g A4, B5, C3 etc.)
 - Supports double sided cards and can optionally include generic back on every card.
+- Limited support for cards from other sources - just pop them into the images folder.
 - Outputs pages into .jpg image files.
 - Flexible page layout; allows you to control the spacing, margins, bleed and image brightness.
 
@@ -21,16 +22,20 @@ pip install -r requirements.txt
 
 ## Usage
 1. Download `cards.xml` from your MPCFIll project and put it into `data/xml`.
-2. Navigate to the `page_maker/` folder
-3. Run the script:
+2. Put any extra card images you'd like added to the pages into the `data/images` folder.
+3. Navigate to the `page_maker/` folder
+4. Run the script:
 ```
 python3 src/page_maker.py
 ```
 
-Optionally put any additional card images (fronts and backs) into `data/images/`. Additional images need to be added to `cards.xml` for the script to be aware of them. Save the additional
-images with the naming structure `name (id)` then add that id to `cards.xml`, use one of the other cards as a template for what the new entry should look like. Make sure to give it a 
-unique slot number(s) too. If this card does not have any bleed around it, make the id number only out of x's (e.g `Sol Ring (xxxx).png`, any number of x's will work, just make sure no 
-two cards have the same amount.) so that the programme knows not to crop it down. Yes this is very manual and tedious and yes I hope to make this far simpler.
+The script will download images from `cards.xml` into `data/images`. It will also add any cards that don't have ids (i.e the cards you added to `data/images`)
+to `cards.xml` and will add an id number to their image name, to match the MPCFill template. The id will be made only of `x`. This is to signal to the
+code to not crop any bleed from the card as it is assumed that any cards you add don't have bleed.
+
+If you later remove any cards from `cards.xml`, or indeed download an entirely new one, you will be prompted as to whether you would like to delete the 
+image(s). This is to stop a big pile up of images over multiple runs but still allowing multiple runs without having to re-download the images if you want to 
+mess around with the parameters.
 
 Developers can create a `params_local.py` in the root folder to override parameters in `params.py` without overwriting the original.
 
@@ -64,3 +69,7 @@ Git:
 git clone https://github.com/Flenzil/PageMaker
 ```
 
+
+## Future Additions
+- Back and front support for non MPCFill cards.
+- UI
