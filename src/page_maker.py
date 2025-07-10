@@ -510,6 +510,45 @@ def save_pages(page, back, name):
     page.clear_page()
 
 
+def add_image_to_xml(image, image_id_map):
+    """If an image doesn't have an id, try adding it to the .xml and 
+    assigning it an id made only of x (prevents cropping later). 
+    Allows non-MPCFill cards to be added.
+
+    Args:
+        image (str): file name of the image
+        image_id_map (dict of str: str): dictionary mapping id to image path 
+    """
+    with open(os.path.join(XML_PATH, "cards.xml")) as f:
+        tree = ET.parse(f)
+    root = tree.getroot()
+    cards = root.find("fronts")
+
+    x_count = 1
+    for card in cards:
+        if set(card.find("id").text) == set("x"):
+            x_count += 1
+    else:
+        slot = card.find("slots").text.split(",")[-1]
+
+    id = "x" * x_count
+
+    new_card = ET.SubElement(cards, "card")
+    ET.SubElement(new_card, "id").text = id
+    ET.SubElement(new_card, "slots").text = str(int(slot) + 1)
+    ET.SubElement(new_card, "name").text = image
+    ET.SubElement(new_card, "query").text = Path(image).stem
+
+    ET.indent(tree, space="\t", level=0)
+    tree.write(os.path.join(XML_PATH, "cards.xml"))
+
+    new_name = f"{Path(image).stem} ({id}){Path(image).suffix}"
+    os.rename(os.path.join(IMAGE_PATH, image),
+              os.path.join(IMAGE_PATH, new_name))
+
+    image_id_map[id] = new_name
+
+
 def create_id_image_map():
     """Creates a dict mapping image id to its path.
 
@@ -527,7 +566,7 @@ def create_id_image_map():
         try:
             image_id_map[re.findall(r"\((?=[^\(]*$).*(?=\)\.)", image)[-1][1:]] = image
         except IndexError:
-            raise Exception(f"{image} has invalid naming structure. Should be: \"name (id).format\"")
+            add_image_to_xml(image, image_id_map)
     return image_id_map
 
 
