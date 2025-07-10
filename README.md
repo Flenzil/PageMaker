@@ -10,8 +10,9 @@ PageMaker is a Python script that formats MTG cards into printable pages. Design
 - Flexible page layout; allows you to control the spacing, margins, bleed and image brightness.
 
 ## Requirements
-- Python 3.7+
-- Pillow 10.40+
+- `python 3.4+`
+- `pillow 10.4.0`
+- `requests 2.32.4`
 
 Install dependencies with:
 ```
@@ -19,13 +20,17 @@ pip install -r requirements.txt
 ```
 
 ## Usage
-1. Download card images and `.xml` from MPCFIll.
-2. Put all card images (fronts and backs) into `/images/` and the XML file (named `cards.xml`) into `/xml/`.
+1. Download `cards.xml` from your MPCFIll project and put it into `data/xml`.
+2. Navigate to the `page_maker/` folder
 3. Run the script:
 ```
-python3 page_maker.py
+python3 src/page_maker.py
 ```
 
+Optionally put any additional card images (fronts and backs) into `data/images/`. Additional images need to be added to `cards.xml` for the script to be aware of them. Save the additional
+images with the naming structure `name (id)` then add that id to `cards.xml`, use one of the other cards as a template for what the new entry should look like. Make sure to give it a 
+unique slot number(s) too. If this card does not have any bleed around it, make the id number only out of x's (e.g `Sol Ring (xxxx).png`, any number of x's will work, just make sure no 
+two cards have the same amount.) so that the programme knows not to crop it down. Yes this is very manual and tedious and yes I hope to make this far simpler.
 
 Developers can create a `params_local.py` in the root folder to override parameters in `params.py` without overwriting the original.
 
@@ -50,7 +55,7 @@ Developers can create a `params_local.py` in the root folder to override paramet
 Example:
 
 ```
-python3 page_maker.py -q medium -bx 1 --card-backs
+python3 src/page_maker.py -q medium -bx 1 --card-backs
 ```
 
 ## Installation
