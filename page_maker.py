@@ -1,5 +1,6 @@
 import os
 import io
+import re
 import requests
 import sys
 import glob
@@ -375,8 +376,8 @@ class Card:
             PIL.Image: Image data for card (or card back)
         '''
 
-        if set(id) == set("x") or self.id_image_map.get(id) is not None:
-            return Image.open(self.id_image_map.get(id))
+        if set(id) == set("x") or id in self.id_image_map:
+            return Image.open(os.path.join(IMAGE_PATH, self.id_image_map[id]))
 
         try:
             url = f"https://drive.google.com/uc?id={id}"
@@ -391,7 +392,7 @@ class Card:
             return image
 
         except PIL.UnidentifiedImageError:
-            return Image.open(self.id_image_map.get(id))
+            return Image.open(os.path.join(IMAGE_PATH, self.id_image_map[id]))
 
     def save_image(self, image, filename):
         image.save(os.path.join(IMAGE_PATH, filename))
@@ -431,7 +432,6 @@ def parse_args():
     return args
 
 def handle_errors(args):
-    import re
     if not re.match(r"^[abc]{1}\d{1}$", args.page_size.lower()):
         print(f"{args.page_size} page size not supported. Use A4, B3, C5 etc.")
         sys.exit(1)
@@ -507,62 +507,55 @@ def save_pages(page, back, name):
     back.clear_page()
     page.clear_page()
 
-def add_card(card, page, page_back):
-    """Adds card image to page, also add back side of card to a seperate
-    page, if applicable.
 
-    Args:
-        card (Card): Card object containing card information
-        page (Page): Page object containing card fronts
-        page_back (Page): Page object containing card backs
-    """
-    print(f"Adding {card.card.find('query').text.title()}")
+def create_id_image_map():
+    image_id_map = {}
+    for image in os.listdir(IMAGE_PATH):
+        if "Zone.Identifier" in image:
+            continue
+        if "put_card_images_here" in image:
+            continue
+        #Regex: All characters within the last pair of brackets followed by a .
+        #BUG: Copies of a file in windows add a (#) before the extension. Regex picks that up instead of id.
+        try:
+            image_id_map[re.findall(r"\((?=[^\(]*$).*(?=\)\.)", image)[-1][1:]] = image
+        except IndexError:
+            raise Exception(f"{image} has invalid naming structure. Should be: \"name (id).format\"")
+    return image_id_map
 
-    if card.image is None:
-        raise Exception(f'Image for "{card.name}" not found')
 
-    if card.back is not None:
-        if card.image_back is None:
-            raise Exception(f'Image for "{card.name_back}" not found')
+def delete_removed_cards(id_image_map):
 
-    if card.back is None:
-        page.add_image_to_page(card)
-    else:
-        page_back.current_row = page.current_row
-        page_back.current_col = page.columns - 1 - page.current_col
+    with open(os.path.join(XML_PATH, "cards.xml")) as f:
+        root = ET.parse(f).getroot()
+        cards = root.find("fronts")
+        backs = root.find("backs")
 
-        page.add_image_to_page(card)
-        page_back.add_image_to_page(card, is_back=True)
+    card_ids = [card.find("id").text for card in cards] + [back.find("id").text for back in backs]
 
-def create_id_image_map(cards):
-    """Create a mapping of card id to image path
+    card_id_set = set(card_ids)
+    image_id_set = set(list(id_image_map.keys()))
 
-    Args:
-        cards list[ElementTree] : List of card xml objects.
-    """
-    import re
-    id_image_map = {}
-    for card in cards:
-        card_id = card.find("id").text
-        for card_image in os.listdir(IMAGE_PATH):
-            if "Zone.Identifier" in card_image:
-                continue
-            if "put_card_images_here" in card_image:
-                continue
+    to_delete = list(image_id_set - card_id_set)
 
-            #Regex: All characters within the last pair of brackets followed by a .
-            #BUG: Copies of a file in windows add a (#) before the extension. Regex picks that up instead of id.
-            
-            try:
-                id = re.findall(r"\((?=[^\(]*$).*(?=\)\.)", card_image)[-1][1:]
-                if id == card_id:
-                    id_image_map[card_id] = os.path.join(IMAGE_PATH, card_image)
-                    break
-            except IndexError:
-                raise Exception(f"{card.find('query').text.lower()} not found!")
-    return id_image_map
+    if not to_delete:
+        return
+    print("")
+    print("The following cards have been removed from the xml file:")
+    [print(f"{id_image_map[id]}") for id in to_delete]
+    print("")
+    for id in to_delete:
+        image = id_image_map[id]
+        response = input(f"Would you like to delete: {image} (y/n)? Type a to delete all of the removed cards. ")
+        if response.lower() in ["y", "yes"]:
+            os.remove(os.path.join(IMAGE_PATH, image))
+        if response.lower() in ["a", "all"]:
+            [os.remove(os.path.join(IMAGE_PATH, id_image_map[delete])) for delete in to_delete]
+            print("")
+            return
 
-def create_cards(args):
+
+def create_cards(args, id_image_map):
     """Finds card information from .xml file and creates a list of Card objects
     from it.
 
@@ -582,8 +575,6 @@ def create_cards(args):
         raise Exception("No cards found.")
     if backs is None:
         backs = []
-
-    id_image_map = create_id_image_map(cards) | create_id_image_map(backs)
 
     card_objs = []
 
@@ -634,6 +625,35 @@ def batch_cards(cards, page):
                 return batch[:page.rows * page.columns]
     return batch
 
+
+def add_card(card, page, page_back):
+    """Adds card image to page, also add back side of card to a seperate
+    page, if applicable.
+
+    Args:
+        card (Card): Card object containing card information
+        page (Page): Page object containing card fronts
+        page_back (Page): Page object containing card backs
+    """
+    print(f"Adding {card.card.find('query').text.title()}")
+
+    if card.image is None:
+        raise Exception(f'Image for "{card.name}" not found')
+
+    if card.back is not None:
+        if card.image_back is None:
+            raise Exception(f'Image for "{card.name_back}" not found')
+
+    if card.back is None:
+        page.add_image_to_page(card)
+    else:
+        page_back.current_row = page.current_row
+        page_back.current_col = page.columns - 1 - page.current_col
+
+        page.add_image_to_page(card)
+        page_back.add_image_to_page(card, is_back=True)
+
+
 def add_card_to_page(batch, cards, page, page_back):
     """Adds cards in current batch to page, then removes the card
     from the list, or decrements the number of copies.
@@ -652,7 +672,7 @@ def add_card_to_page(batch, cards, page, page_back):
             cards.remove(card)
 
 
-def create_pages(args):
+def create_pages(args, cards):
     """Creates pages and populates them with card images, then saves them as a jpg.
 
     Args:
@@ -663,7 +683,6 @@ def create_pages(args):
 
     page_count = 1
 
-    cards = create_cards(args)
     batch = batch_cards(cards, page)
 
     while len(cards) > 0:
@@ -688,11 +707,13 @@ def create_pages(args):
         print("Saved!")
 
 
-
 def main():
     args = parse_args()
+    id_image_map = create_id_image_map()
+    delete_removed_cards(id_image_map)
     clear_pages_folder()
-    create_pages(args)
+    cards = create_cards(args, id_image_map)
+    create_pages(args, cards)
 
 if __name__ == "__main__":
     main()
