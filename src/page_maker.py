@@ -511,6 +511,11 @@ def save_pages(page, back, name):
 
 
 def create_id_image_map():
+    """Creates a dict mapping image id to its path.
+
+    Returns:
+        (dict of str: str): dictionary mapping id to image path 
+    """
     image_id_map = {}
     for image in os.listdir(IMAGE_PATH):
         if "Zone.Identifier" in image:
@@ -527,6 +532,12 @@ def create_id_image_map():
 
 
 def delete_removed_cards(id_image_map):
+    """Prompts user for deleting images in IMAGE_PATH that have been
+    removed from the .xml file to keep IMAGE_PATH clean.
+
+    Args:
+        id_image_map (dict of str: str) dictionary mapping id to image path
+    """
 
     with open(os.path.join(XML_PATH, "cards.xml")) as f:
         root = ET.parse(f).getroot()
