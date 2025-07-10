@@ -1,7 +1,10 @@
 import os
+import io
+import requests
 import sys
 import glob
 import argparse
+import PIL
 from PIL import Image, ImageEnhance, ImageDraw
 import xml.etree.ElementTree as ET
 
@@ -194,6 +197,13 @@ class Page:
             upper = self.mpcfill_bleed
             lower = self.card_height + self.mpcfill_bleed
             
+        '''
+        #Cute but probably too terse equivalent to the above if statements.
+        left = has_bleed * self.mpcfill_bleed - keep_bleed * self.card_bleed_w
+        right = self.card_width + has_bleed * self.mpcfill_bleed + keep_bleed * self.card_bleed_w
+        upper = has_bleed * self.mpcfill_bleed - keep_bleed * self.card_bleed_h
+        lower = self.card_height + has_bleed * self.mpcfill_bleed + keep_bleed * self.card_bleed_h
+        '''
         return image.crop((left, upper, right, lower))
     
     def add_crop_marks(self, x, y):
@@ -245,9 +255,9 @@ class Page:
             is_back (bool): True if adding the image of the back of the card.
         """
         if is_back:
-            image = Image.open(card.image_back)
+            image = card.image_back
         else:
-            image = Image.open(card.image)
+            image = card.image
 
         if not self.no_bleed and (self.has_back or is_back) or self.always_bleed:
             keep_bleed = True
@@ -320,8 +330,8 @@ class Card:
         self.id_image_map = id_image_map
 
         self.id = self.card.find("id").text
-        self.image = self.id_image_map.get(self.id)
-        self.name = self.card.find("name").text.title()
+        self.name = os.path.splitext(self.card.find("name").text)[0]
+        self.image = self.retrieve_image(self.id, self.name)
 
         #Non MPCFill cards should be marked with an id made only of
         #x. It is assumed that such a card has no bleed.
@@ -335,11 +345,11 @@ class Card:
             self.has_back = True
             try:
                 self.id_back = self.back.find("id").text
-                self.name_back = self.back.find("name").text.title()
+                self.name_back = os.path.splitext(self.back.find("name").text)[0]
             except AttributeError:
                 self.id_back = self.back.text
                 self.name_back = "Card Back"
-            self.image_back = self.id_image_map.get(self.id_back)
+            self.image_back = self.retrieve_image(self.id_back, self.name_back)
         else:
             self.back = None
             self.id_back = None
@@ -352,6 +362,41 @@ class Card:
             return f"{self.name} // {self.name_back}"
         else:
             return self.name 
+
+    def retrieve_image(self, id, name):
+        '''Use card image from IMAGE_PATH if available, else download
+        the image and save to IMAGE_PATH.
+
+        Args:
+            id (str): ID number of card (or card back)
+            name (str): Name of card (or card back)
+
+        Returns:
+            PIL.Image: Image data for card (or card back)
+        '''
+
+        if set(id) == set("x") or self.id_image_map.get(id) is not None:
+            return Image.open(self.id_image_map.get(id))
+
+        try:
+            url = f"https://drive.google.com/uc?id={id}"
+            headers = {"User-Agent": "Mozilla/5.0"}
+
+            print(f"Downloading {name}...")
+
+            response = requests.get(url, headers=headers, stream=True)
+            image = Image.open(io.BytesIO(response.content))
+
+            self.save_image(image, f"{name} ({id}).png")
+            return image
+
+        except PIL.UnidentifiedImageError:
+            return Image.open(self.id_image_map.get(id))
+
+    def save_image(self, image, filename):
+        image.save(os.path.join(IMAGE_PATH, filename))
+
+
 
 
 def parse_args():
@@ -434,51 +479,6 @@ def convert_pixels_to_mm(card_width, pixels):
     """
     mm_per_pixel = p.card_width_in_mm / card_width
     return pixels * mm_per_pixel
-
-def check_all_cards_are_present():
-    """
-    Sometimes mpcfill misses an image download for some reason so this checks
-    if all of the images for the cards in the .xml are present. Raises an
-    exception with a list of missing cards if any.
-    """
-
-    def card_compare(card_id):
-        """Return true if there is an image in the image folder matching card_id,
-        else false
-        """
-        for image_name in os.listdir(IMAGE_PATH):
-            if card_id in image_name:
-                return True
-        return False
-
-    with open(os.path.join(XML_PATH, "cards.xml")) as f:
-        root = ET.parse(f).getroot()
-        cards = root.find("fronts")
-
-    if cards is None:
-        raise Exception("No cards found!")
-
-    not_found = []
-
-    for card in cards:
-        card_id = card.find("id")
-        card_name = card.find("name")
-        if card_id is not None:
-            card_id = card_id.text
-        else:
-            raise Exception("ID missing on some cards!")
-        if card_name is not None:
-            card_name = card_name.text
-        else:
-            raise Exception("Name missing on some cards!")
-
-        if not card_compare(card_id):
-            not_found.append(card_name)
-
-    if not_found == []:
-        print("All cards present!")
-    else:
-        raise Exception(f"The following cards are missing: {not_found}")
 
 
 def clear_pages_folder():
@@ -691,10 +691,8 @@ def create_pages(args):
 
 def main():
     args = parse_args()
-    check_all_cards_are_present()
     clear_pages_folder()
     create_pages(args)
-
 
 if __name__ == "__main__":
     main()
