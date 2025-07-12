@@ -8,7 +8,9 @@ import argparse
 import PIL
 from PIL import Image, ImageEnhance, ImageDraw
 from pathlib import Path
+
 import xml.etree.ElementTree as ET
+import questionary as q
 
 import params as p
 
@@ -259,8 +261,10 @@ class Page:
         """
         if is_back:
             image = card.image_back
+            has_bleed = card.has_bleed_back
         else:
             image = card.image
+            has_bleed = card.has_bleed
 
         if not self.no_bleed and (self.has_back or is_back) or self.always_bleed:
             keep_bleed = True
@@ -268,9 +272,9 @@ class Page:
             keep_bleed = False
 
         #Resize and crop card image
-        image = self.resize_image(image, has_bleed=card.has_bleed)
-        if card.has_bleed or keep_bleed:
-            image = self.crop_image(image, keep_bleed=keep_bleed, has_bleed=card.has_bleed)
+        image = self.resize_image(image, has_bleed=has_bleed)
+        if has_bleed or keep_bleed:
+            image = self.crop_image(image, keep_bleed=keep_bleed, has_bleed=has_bleed)
 
         #Modify brightness of image
         if self.brightness_adjust != 1:
@@ -352,6 +356,11 @@ class Card:
             except AttributeError:
                 self.id_back = self.back.text
                 self.name_back = "Card Back"
+            if set(self.id_back) == set("x"):
+                self.has_bleed_back = False
+            else:
+                self.has_bleed_back = True
+
             self.image_back = self.retrieve_image(self.id_back, self.name_back)
         else:
             self.back = None
@@ -378,8 +387,18 @@ class Card:
             PIL.Image: Image data for card (or card back)
         '''
 
-        if set(id) == set("x") or id in self.id_image_map:
-            return Image.open(os.path.join(IMAGE_PATH, self.id_image_map[id]))
+        for image in os.listdir(IMAGE_PATH):
+            if id in image:
+                is_on_disk = True
+                break
+        else:
+            is_on_disk = False
+
+        if set(id) == set("x") or is_on_disk:
+            try:
+                return Image.open(os.path.join(IMAGE_PATH, self.id_image_map[id]))
+            except FileNotFoundError:
+                return Image.open(os.path.join(IMAGE_PATH, f"{Path(self.id_image_map[id]).stem}.png"))
 
         try:
             url = f"https://drive.google.com/uc?id={id}"
@@ -390,11 +409,17 @@ class Card:
             response = requests.get(url, headers=headers, stream=True)
             image = Image.open(io.BytesIO(response.content))
 
-            self.save_image(image, f"{name} ({id}).png")
+            filename = f"{name} ({id}).png"
+
+            self.id_image_map[id] = filename
+            self.save_image(image, filename)
             return image
 
         except PIL.UnidentifiedImageError:
-            return Image.open(os.path.join(IMAGE_PATH, self.id_image_map[id]))
+            try:
+                return Image.open(os.path.join(IMAGE_PATH, self.id_image_map[id]))
+            except FileNotFoundError:
+                return Image.open(os.path.join(IMAGE_PATH, f"{Path(self.id_image_map[id]).stem}.png"))
 
     def save_image(self, image, filename):
         image.save(os.path.join(IMAGE_PATH, filename))
@@ -510,14 +535,47 @@ def save_pages(page, back, name):
     page.clear_page()
 
 
-def add_image_to_xml(image, image_id_map):
+def add_image_to_xml_prompt(extra_images, id_image_map):
+    """Prompt user to assign images that don't have an id to be
+    added or added as a back to another card.
+
+    Args:
+        extra_images list(str): list of images that don't have an id
+        id_image_map (dict of str: str): dictionary mapping id to image path 
+    """
+    image_pairs = {}
+    for image in extra_images:
+        if image in image_pairs:
+            #Image has been chosen as front face of a previous image
+            add_image_to_xml(image, id_image_map)
+            continue
+
+        add_to_page = q.select(f"Would you like to add {image} to your pages?",
+                choices=["yes", "no", "add as back"]).ask()
+
+        if add_to_page == "yes":
+            add_image_to_xml(image, id_image_map)
+        elif add_to_page == "add as back":
+            choices = [im for im in id_image_map.values() if im not in image_pairs]
+            front_image = q.select(f"Which card would you like to add {image} to the back of?",
+                    choices=choices).ask()
+            
+            image_pairs[front_image] = image
+
+    for front, back in image_pairs.items():
+        front_id = next(k for k, v in id_image_map.items() if Path(front).stem in v)
+        add_image_to_xml(back, id_image_map, front_id=front_id)
+
+
+def add_image_to_xml(image, id_image_map, front_id=None):
     """If an image doesn't have an id, try adding it to the .xml and 
     assigning it an id made only of x (prevents cropping later). 
     Allows non-MPCFill cards to be added.
 
     Args:
         image (str): file name of the image
-        image_id_map (dict of str: str): dictionary mapping id to image path 
+        id_image_map (dict of str: str): dictionary mapping id to image path 
+        front_id (str or None): id of the front face of the card, if any
     """
     with open(os.path.join(XML_PATH, "cards.xml")) as f:
         tree = ET.parse(f)
@@ -528,25 +586,63 @@ def add_image_to_xml(image, image_id_map):
     for card in cards:
         if set(card.find("id").text) == set("x"):
             x_count += 1
+        if front_id is not None:
+            if card.find("id").text == front_id:
+                front_slot = card.find("slots").text
     else:
-        slot = card.find("slots").text.split(",")[-1]
+        last_slot = card.find("slots").text.split(",")[-1]
 
     id = "x" * x_count
+    if front_id is None:
+        slot = str(int(last_slot) + 1)
+    else:
+        slot = front_slot
+
+    if front_id is not None:
+        cards = root.find("backs")
+        if cards is None:
+            cards = ET.SubElement(root, "backs")
 
     new_card = ET.SubElement(cards, "card")
     ET.SubElement(new_card, "id").text = id
-    ET.SubElement(new_card, "slots").text = str(int(slot) + 1)
+    ET.SubElement(new_card, "slots").text = slot
     ET.SubElement(new_card, "name").text = image
     ET.SubElement(new_card, "query").text = Path(image).stem
 
     ET.indent(tree, space="\t", level=0)
+    print(os.path.join(XML_PATH, "cards.xml"))
     tree.write(os.path.join(XML_PATH, "cards.xml"))
 
     new_name = f"{Path(image).stem} ({id}){Path(image).suffix}"
     os.rename(os.path.join(IMAGE_PATH, image),
               os.path.join(IMAGE_PATH, new_name))
 
-    image_id_map[id] = new_name
+    id_image_map[id] = new_name
+
+
+def add_extra_images(id_image_map):
+    """Search IMAGE_PATH for images with IDs that are not
+    in the xml and prompt to ask the user if they want to add them.
+
+    Args:
+        id_image_map (dict of str: str): dictionary mapping id to image path 
+    """
+    extra_images = []
+    for image in os.listdir(IMAGE_PATH):
+        if "put_card_images_here" in image:
+            continue
+        if "Zone.Identifier" in image:
+            continue
+
+        id_regex = r"\((?=[^\(]*$).*(?=\)\.)"
+        try:
+            id = re.findall(id_regex, image)[-1][1:]
+            if id not in id_image_map:
+                extra_images.append(image)
+        except IndexError:
+            extra_images.append(image)
+
+    add_image_to_xml_prompt(extra_images, id_image_map)
 
 
 def create_id_image_map():
@@ -555,19 +651,25 @@ def create_id_image_map():
     Returns:
         (dict of str: str): dictionary mapping id to image path 
     """
-    image_id_map = {}
-    for image in os.listdir(IMAGE_PATH):
-        if "Zone.Identifier" in image:
-            continue
-        if "put_card_images_here" in image:
-            continue
-        #Regex: All characters within the last pair of brackets followed by a .
-        #BUG: Copies of a file in windows add a (#) before the extension. Regex picks that up instead of id.
-        try:
-            image_id_map[re.findall(r"\((?=[^\(]*$).*(?=\)\.)", image)[-1][1:]] = image
-        except IndexError:
-            add_image_to_xml(image, image_id_map)
-    return image_id_map
+    def populate_id_image_map(cards, id_image_map):
+        for card in cards:
+            id = card.find("id").text
+            name = card.find("name").text
+            image = f"{Path(name).stem} ({id}){Path(name).suffix}"
+            id_image_map[id] = image
+
+    id_image_map = {}
+    with open(os.path.join(XML_PATH, "cards.xml")) as f:
+        root = ET.parse(f).getroot()
+
+    fronts = root.find("fronts")
+    populate_id_image_map(fronts, id_image_map)
+
+    backs = root.find("backs")
+    if backs is not None:
+        populate_id_image_map(backs, id_image_map)
+
+    return id_image_map
 
 
 def delete_removed_cards(id_image_map):
@@ -583,7 +685,9 @@ def delete_removed_cards(id_image_map):
         cards = root.find("fronts")
         backs = root.find("backs")
 
-    card_ids = [card.find("id").text for card in cards] + [back.find("id").text for back in backs]
+    card_ids = [card.find("id").text for card in cards]
+    if backs is not None:
+        card_ids += [back.find("id").text for back in backs]
 
     card_id_set = set(card_ids)
     image_id_set = set(list(id_image_map.keys()))
@@ -613,6 +717,7 @@ def create_cards(args, id_image_map):
 
     Args:
         args (ArgumentParser): Object containing command-line arguments.
+        id_image_map (dict of str: str) dictionary mapping id to image path
 
     Returns:
         list[Card]: List of Card objects, each representing a unique card.
@@ -729,6 +834,7 @@ def create_pages(args, cards):
 
     Args:
         args (ArgumentParser): Object containing command-line arguments.
+        cards (list of Card): list of Card objects
     """
     page = Page(args)
     page_back = Page(args, is_back=True)
@@ -762,6 +868,7 @@ def create_pages(args, cards):
 def main(argv=None):
     args = parse_args(argv=argv)
     id_image_map = create_id_image_map()
+    add_extra_images(id_image_map)
     delete_removed_cards(id_image_map)
     clear_pages_folder()
     cards = create_cards(args, id_image_map)
