@@ -624,7 +624,7 @@ def add_image_to_xml(image, cards, front=None):
         last_slot = card.slots[-1]
 
     id = "x" * x_count
-    if front.id is None:
+    if front is None:
         slot = str(int(last_slot) + 1)
     else:
         slot = ",".join(front.slots)
@@ -667,20 +667,27 @@ def add_extra_images(cards):
     """
     extra_images = []
     card_ids = [id for card in cards for id in [card.id, card.id_back] ]
-    for image in IMAGE_PATH.glob("*"):
-        image = image.name
+    for image_full in IMAGE_PATH.glob("*"):
+        image = image_full.stem
+        image_full = image_full.name
+
+        #regex: any string of only numbers between brackets at the end of string
+        windows_copy = re.findall(r"\([0-9]\)$", image)
+        if windows_copy:
+            image = image.replace(windows_copy[0], "")
         if "put_card_images_here" in image:
             continue
         if "Zone.Identifier" in image:
             continue
 
-        id_regex = r"\((?=[^\(]*$).*(?=\)\.)"
+        #Regex: any chars within () at the end of the string
+        id_regex = r"(?<=\()(?=[^\(])[^()]*(?=\)$)"
         try:
-            id = re.findall(id_regex, image)[-1][1:]
+            id = re.findall(id_regex, image)[0]
             if id not in card_ids:
-                extra_images.append(image)
+                extra_images.append(image_full)
         except IndexError:
-            extra_images.append(image)
+            extra_images.append(image_full)
 
     if extra_images:
         add_image_to_xml_prompt(extra_images, cards)
@@ -700,22 +707,29 @@ def delete_removed_cards():
     if backs is not None:
         card_ids += [back.find("id").text for back in backs]
 
-    id_regex = r"\((?=[^\(]*$).*(?=\)\.)"
-
     image_ids = []
     images = {}
-    for image in IMAGE_PATH.glob("*"):
-        image = image.name
+
+    #Regex: any chars within () at the end of the string
+    id_regex = r"(?<=\()(?=[^\(])[^()]*(?=\)$)"
+
+    for image_full in IMAGE_PATH.glob("*"):
+        image = image_full.stem
+        image_full = image_full.name
+
+        #regex: any string of only numbers between brackets at the end of string
+        windows_copy = re.findall(r"\([0-9]\)$", image)
+        if windows_copy:
+            image = image.replace(windows_copy[0], "")
         if "put_card_images_here" in image:
             continue
         if "Zone.Identifier" in image:
             continue
 
-        id_regex = r"\((?=[^\(]*$).*(?=\)\.)"
         try:
-            id = re.findall(id_regex, image)[-1][1:]
+            id = re.findall(id_regex, image)[0]
             image_ids.append(id)
-            images[id] = image
+            images[id] = image_full
         except IndexError:
             continue
 
