@@ -1,9 +1,7 @@
-import os
 import io
 import re
 import requests
 import sys
-import glob
 import argparse
 import PIL
 from PIL import Image, ImageEnhance, ImageDraw
@@ -15,9 +13,9 @@ import questionary as q
 import params as p
 
 ROOT = Path(__file__).resolve().parent.parent
-IMAGE_PATH = ROOT / "data/images/"
-PAGE_PATH = ROOT / "pages/"
-XML_PATH = ROOT / "data/xml/"
+IMAGE_PATH = Path(ROOT / "data/images")
+PAGE_PATH = Path(ROOT / "pages")
+XML_PATH = Path(ROOT / "data/xml")
 
 """
 A Python script for placing Magic: The Gathering card images onto printable pages.
@@ -343,7 +341,8 @@ class Card:
         self.print_name = re.match(regex, Path(self.name).stem).group()
 
         self.image_name = f"{Path(self.name).stem} ({self.id}){Path(self.name).suffix}"
-        self.image_path = os.path.join(IMAGE_PATH, self.image_name)
+        #self.image_path = os.path.join(IMAGE_PATH, self.image_name)
+        self.image_path = IMAGE_PATH / self.image_name
 
         #self.image = self.retrieve_image(self.id, self.name)
 
@@ -362,7 +361,7 @@ class Card:
                 self.name_back = self.back.find("name").text
                 self.print_name_back = re.match(regex, Path(self.name_back).stem).group()
                 self.image_name_back = f"{Path(self.name_back).stem} ({self.id_back}){Path(self.name_back).suffix}"
-                self.image_path_back = os.path.join(IMAGE_PATH, self.image_name_back)
+                self.image_path_back = IMAGE_PATH / self.image_name_back
             except AttributeError:
                 self.id_back = self.back.text
                 self.name_back = "Card Back"
@@ -408,8 +407,8 @@ class Card:
             PIL.Image: Image data for card (or card back)
         '''
 
-        for image in os.listdir(IMAGE_PATH):
-            if id in image:
+        for image in IMAGE_PATH.glob("*"):
+            if id in image.name:
                 is_on_disk = True
                 break
         else:
@@ -431,7 +430,7 @@ class Card:
                     continue
                 except OSError:
                     #Truncated image, redownload image
-                    os.remove(path)
+                    Path.unlink(path)
                     break
             else:
                 raise Exception(f"{ppath.stem} is not a valid image file")
@@ -458,7 +457,7 @@ class Card:
                 return Image.open(f"{Path(image_path).stem}.png")
 
     def save_image(self, image, filename):
-        image.save(os.path.join(IMAGE_PATH, filename))
+        image.save(IMAGE_PATH / filename)
 
 
 
@@ -548,10 +547,9 @@ def clear_pages_folder():
     """
     Remove old pages from pages folder.
     """
-    os.makedirs(PAGE_PATH, exist_ok=True)
-    pages = glob.glob(os.path.join(PAGE_PATH, "*"))
-    for i in pages:
-        os.remove(i)
+    PAGE_PATH.mkdir(exist_ok=True)
+    for page in PAGE_PATH.glob("*"):
+        Path.unlink(page)
 
 
 def save_pages(page, back, name):
@@ -562,10 +560,10 @@ def save_pages(page, back, name):
         back (Page): Page object containing card backs
         name (int): Page number, used for the name of the .jpg
     """
-    page.save_page(os.path.join(PAGE_PATH, f"{name}.jpg"))
+    page.save_page(PAGE_PATH / f"{name}.jpg")
 
     if page.has_back:
-        back.save_page(os.path.join(PAGE_PATH, f"{name}_back.jpg"))
+        back.save_page(PAGE_PATH / f"{name}_back.jpg")
 
     back.clear_page()
     page.clear_page()
@@ -631,7 +629,7 @@ def add_image_to_xml(image, cards, front=None):
     else:
         slot = ",".join(front.slots)
 
-    with open(os.path.join(XML_PATH, "cards.xml")) as f:
+    with open(XML_PATH / "cards.xml") as f:
         tree = ET.parse(f)
     root = tree.getroot()
     if front is not None:
@@ -648,11 +646,10 @@ def add_image_to_xml(image, cards, front=None):
     ET.SubElement(new_card, "query").text = Path(image).stem
 
     ET.indent(tree, space="\t", level=0)
-    tree.write(os.path.join(XML_PATH, "cards.xml"))
+    tree.write(XML_PATH / "cards.xml")
 
     new_name = f"{Path(image).stem} ({id}){Path(image).suffix}"
-    os.rename(os.path.join(IMAGE_PATH, image),
-              os.path.join(IMAGE_PATH, new_name))
+    Path(IMAGE_PATH / image).rename(IMAGE_PATH / new_name)
 
     if front is None:
         cards.append(Card(new_card))
@@ -670,7 +667,8 @@ def add_extra_images(cards):
     """
     extra_images = []
     card_ids = [id for card in cards for id in [card.id, card.id_back] ]
-    for image in os.listdir(IMAGE_PATH):
+    for image in IMAGE_PATH.glob("*"):
+        image = image.name
         if "put_card_images_here" in image:
             continue
         if "Zone.Identifier" in image:
@@ -693,7 +691,7 @@ def delete_removed_cards():
     removed from the .xml file to keep IMAGE_PATH clean.
     """
 
-    with open(os.path.join(XML_PATH, "cards.xml")) as f:
+    with open(XML_PATH / "cards.xml") as f:
         root = ET.parse(f).getroot()
         cards = root.find("fronts")
         backs = root.find("backs")
@@ -706,7 +704,8 @@ def delete_removed_cards():
 
     image_ids = []
     images = {}
-    for image in os.listdir(IMAGE_PATH):
+    for image in IMAGE_PATH.glob("*"):
+        image = image.name
         if "put_card_images_here" in image:
             continue
         if "Zone.Identifier" in image:
@@ -733,9 +732,9 @@ def delete_removed_cards():
         image = images[id]
         response = input(f"Would you like to delete: {image} (y/n)? Type a to delete all of the removed cards. ")
         if response.lower() in ["y", "yes"]:
-            os.remove(os.path.join(IMAGE_PATH, image))
+            Path.unlink(IMAGE_PATH / image)
         if response.lower() in ["a", "all"]:
-            [os.remove(os.path.join(IMAGE_PATH, images[delete])) for delete in to_delete]
+            [Path.unlink(IMAGE_PATH / images[delete]) for delete in to_delete]
             print("")
             return
 
@@ -750,7 +749,7 @@ def create_cards(args):
     Returns:
         list[Card]: List of Card objects, each representing a unique card.
     """
-    with open(os.path.join(XML_PATH, "cards.xml")) as f:
+    with open(XML_PATH / "cards.xml") as f:
         root = ET.parse(f).getroot()
         cards = root.find("fronts")
         backs = root.find("backs")
