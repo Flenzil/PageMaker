@@ -335,7 +335,13 @@ class Card:
         self.instances = len(self.slots)
         self.id = self.card.find("id").text
 
+
+        #Regex: matches from start of string to first (, [ or { without trailing space
+        regex = r"^([^\(\[\{]*?)(?=\s*(\(|\[|\{|$))"
+
         self.name = self.card.find("name").text
+        self.print_name = re.match(regex, Path(self.name).stem).group()
+
         self.image_name = f"{Path(self.name).stem} ({self.id}){Path(self.name).suffix}"
         self.image_path = os.path.join(IMAGE_PATH, self.image_name)
 
@@ -354,6 +360,7 @@ class Card:
             try:
                 self.id_back = self.back.find("id").text
                 self.name_back = self.back.find("name").text
+                self.print_name_back = re.match(regex, Path(self.name_back).stem).group()
                 self.image_name_back = f"{Path(self.name_back).stem} ({self.id_back}){Path(self.name_back).suffix}"
                 self.image_path_back = os.path.join(IMAGE_PATH, self.image_name_back)
             except AttributeError:
@@ -377,9 +384,9 @@ class Card:
 
     def __repr__(self):
         if self.has_back:
-            return f"{self.name} // {self.name_back}"
+            return f"{self.print_name} // {self.print_name_back}"
         else:
-            return self.name 
+            return f"{self.print_name}"
 
     def __floordiv__(self, other):
         return Card(self.card, back=other.card)
@@ -684,7 +691,6 @@ def add_extra_images(cards):
 def delete_removed_cards():
     """Prompts user for deleting images in IMAGE_PATH that have been
     removed from the .xml file to keep IMAGE_PATH clean.
-
     """
 
     with open(os.path.join(XML_PATH, "cards.xml")) as f:
@@ -818,7 +824,7 @@ def add_card(card, page, page_back):
         page (Page): Page object containing card fronts
         page_back (Page): Page object containing card backs
     """
-    print(f"Adding {card.card.find('query').text.title()}")
+    print(f"Adding {card}")
 
     if card.image is None:
         raise Exception(f'Image for "{card.name}" not found')
