@@ -327,10 +327,8 @@ class Card:
 
         Args:
             card (ElementTree): xml object containing card information.
-            id_image_map (dict): map of card id : image path
             back (ElementTree or None): xml object containing information 
                                         for the back of the card, if any.
-            instances (int): number of copies of this card.
         """
         self.card = card
         self.slots = self.card.find("slots").text.split(",")
@@ -572,7 +570,7 @@ def add_image_to_xml_prompt(extra_images, cards):
 
     Args:
         extra_images list(str): list of images that don't have an id
-        id_image_map (dict of str: str): dictionary mapping id to image path 
+        cards (list of Card): list of Card objects
     """
     image_pairs = {}
     for image in extra_images:
@@ -599,7 +597,6 @@ def add_image_to_xml_prompt(extra_images, cards):
 
     for front, back in image_pairs.items():
         card_front = next(card for card in cards if card.image_name == front)
-        #front_id = next(k for k, v in id_image_map.items() if Path(front).stem in v)
         add_image_to_xml(back, cards, front=card_front)
 
 
@@ -610,8 +607,8 @@ def add_image_to_xml(image, cards, front=None):
 
     Args:
         image (str): file name of the image
-        id_image_map (dict of str: str): dictionary mapping id to image path 
-        front_id (str or None): id of the front face of the card, if any
+        cards (list of Card): list of Card objects
+        front (Card or None): Card object representing the front face of the card, if any
     """
 
     x_count = 1
@@ -662,7 +659,7 @@ def add_extra_images(cards):
     in the xml and prompt to ask the user if they want to add them.
 
     Args:
-        id_image_map (dict of str: str): dictionary mapping id to image path 
+        cards (list of Card): list of Card objects
     """
     extra_images = []
     card_ids = [id for card in cards for id in [card.id, card.id_back] ]
@@ -688,8 +685,6 @@ def delete_removed_cards():
     """Prompts user for deleting images in IMAGE_PATH that have been
     removed from the .xml file to keep IMAGE_PATH clean.
 
-    Args:
-        id_image_map (dict of str: str) dictionary mapping id to image path
     """
 
     with open(os.path.join(XML_PATH, "cards.xml")) as f:
@@ -745,7 +740,6 @@ def create_cards(args):
 
     Args:
         args (ArgumentParser): Object containing command-line arguments.
-        id_image_map (dict of str: str) dictionary mapping id to image path
 
     Returns:
         list[Card]: List of Card objects, each representing a unique card.
