@@ -1,9 +1,7 @@
-import io
 import re
-import requests
 import sys
 import argparse
-import PIL
+import asyncio
 from PIL import Image, ImageEnhance, ImageDraw
 from pathlib import Path
 
@@ -11,6 +9,7 @@ import xml.etree.ElementTree as ET
 import questionary as q
 
 import params as p
+from get_images import find_images
 
 ROOT = Path(__file__).resolve().parent.parent
 IMAGE_PATH = Path(ROOT / "data/images")
@@ -328,23 +327,23 @@ class Card:
             back (ElementTree or None): xml object containing information 
                                         for the back of the card, if any.
         """
-        self.card = card
-        self.slots = self.card.find("slots").text.split(",")
+
+        #-------------- Front side --------------
+        self.card_xml = card
+        self.slots = self.card_xml.find("slots").text.split(",")
         self.instances = len(self.slots)
-        self.id = self.card.find("id").text
 
 
         #Regex: matches from start of string to first (, [ or { without trailing space
         regex = r"^([^\(\[\{]*?)(?=\s*(\(|\[|\{|$))"
 
-        self.name = self.card.find("name").text
+        self.name = self.card_xml.find("name").text
+        self.id = self.card_xml.find("id").text
         self.print_name = re.match(regex, Path(self.name).stem).group()
 
         self.image_name = f"{Path(self.name).stem} ({self.id}){Path(self.name).suffix}"
-        #self.image_path = os.path.join(IMAGE_PATH, self.image_name)
         self.image_path = IMAGE_PATH / self.image_name
-
-        #self.image = self.retrieve_image(self.id, self.name)
+        self.image = None
 
         #Non MPCFill cards should be marked with an id made only of
         #x. It is assumed that such a card has no bleed.
@@ -353,26 +352,28 @@ class Card:
         else:
             self.has_bleed = True
 
+        #-------------- Back side --------------
+
         if back is not None:
-            self.back = back
+            self.back_xml = back
             self.has_back = True
             try:
-                self.id_back = self.back.find("id").text
-                self.name_back = self.back.find("name").text
+                self.id_back = self.back_xml.find("id").text
+                self.name_back = self.back_xml.find("name").text
                 self.print_name_back = re.match(regex, Path(self.name_back).stem).group()
                 self.image_name_back = f"{Path(self.name_back).stem} ({self.id_back}){Path(self.name_back).suffix}"
                 self.image_path_back = IMAGE_PATH / self.image_name_back
+                self.image_back = None
             except AttributeError:
-                self.id_back = self.back.text
+                self.id_back = self.back_xml.text
                 self.name_back = "Card Back"
             if set(self.id_back) == set("x"):
                 self.has_bleed_back = False
             else:
                 self.has_bleed_back = True
 
-            #self.image_back = self.retrieve_image(self.id_back, self.name_back)
         else:
-            self.back = None
+            self.back_xml = None
             self.id_back = None
             self.image_back = None
             self.name_back = ""
@@ -380,6 +381,7 @@ class Card:
             self.image_path_back = ""
             self.name_back = ""
             self.has_back = False
+
 
     def __repr__(self):
         if self.has_back:
@@ -436,6 +438,7 @@ class Card:
                 raise Exception(f"{ppath.stem} is not a valid image file")
 
 
+        '''
         try:
             url = f"https://drive.google.com/uc?id={id}"
             headers = {"User-Agent": "Mozilla/5.0"}
@@ -455,6 +458,7 @@ class Card:
                 return Image.open(image_path)
             except FileNotFoundError:
                 return Image.open(f"{Path(image_path).stem}.png")
+        '''
 
     def save_image(self, image, filename):
         image.save(IMAGE_PATH / filename)
@@ -810,8 +814,8 @@ def create_cards(args):
 
     add_extra_images(card_objs)
 
-    for card in card_objs:
-        card.find_images()
+    #Asynchronously load card images - downloading if necessary. 
+    asyncio.run(find_images(card_objs))
 
     #Place all cards with backs first, minimising the number of 2-sided pages.
     return sorted(card_objs, key=lambda x: x.has_back, reverse=True)
@@ -851,11 +855,11 @@ def add_card(card, page, page_back):
     if card.image is None:
         raise Exception(f'Image for "{card.name}" not found')
 
-    if card.back is not None:
+    if card.back_xml is not None:
         if card.image_back is None:
             raise Exception(f'Image for "{card.name_back}" not found')
 
-    if card.back is None:
+    if card.back_xml is None:
         page.add_image_to_page(card)
     else:
         page_back.current_row = page.current_row
