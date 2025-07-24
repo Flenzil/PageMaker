@@ -657,6 +657,10 @@ def add_image_to_xml(image, cards, front=None):
         cards.remove(front)
         cards.append(front // Card(new_card))
 
+# NOTE: Cards with (x) as the id that the user has decided not to delete
+# should have it's id removed, so it doesn't inerfere with another card
+# being added. But the add_extra_images function should be aware that it
+# needs to ignore this file even though it has no id.
 
 def add_extra_images(cards):
     """Search IMAGE_PATH for images with IDs that are not
@@ -751,6 +755,11 @@ def delete_removed_cards():
             [Path.unlink(IMAGE_PATH / images[delete]) for delete in to_delete]
             print("")
             return
+        if response.lower() in ["n", "no"]:
+            if set(id) == set("x"):
+                new_name = image.replace(f" ({id})", "")
+                Path(IMAGE_PATH / image).rename(IMAGE_PATH / new_name) 
+
 
 
 def create_cards(args):
