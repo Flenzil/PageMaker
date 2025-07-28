@@ -392,77 +392,6 @@ class Card:
     def __floordiv__(self, other):
         return Card(self.card, back=other.card)
 
-    def find_images(self):
-        self.image = self.retrieve_image(self.id, self.image_path)
-        if self.has_back:
-            self.image_back = self.retrieve_image(self.id_back, self.image_path_back)
-
-    def retrieve_image(self, id, image_path):
-        '''Use card image from IMAGE_PATH if available, else download
-        the image and save to IMAGE_PATH.
-
-        Args:
-            id (str): ID number of card (or card back)
-            name (str): Name of card (or card back)
-
-        Returns:
-            PIL.Image: Image data for card (or card back)
-        '''
-
-        for image in IMAGE_PATH.glob("*"):
-            if id in image.name:
-                is_on_disk = True
-                break
-        else:
-            is_on_disk = False
-
-        if set(id) == set("x") or is_on_disk:
-            paths = [image_path]
-
-            ppath = Path(image_path)
-            fallback_path = f"{ppath.parent / ppath.stem}.png"
-            if fallback_path not in paths:
-                paths.append(fallback_path)
-
-            for path in paths:
-                try:
-                    Image.open(path).verify()
-                    return Image.open(path)
-                except FileNotFoundError:
-                    continue
-                except OSError:
-                    #Truncated image, redownload image
-                    Path.unlink(path)
-                    break
-            else:
-                raise Exception(f"{ppath.stem} is not a valid image file")
-
-
-        '''
-        try:
-            url = f"https://drive.google.com/uc?id={id}"
-            headers = {"User-Agent": "Mozilla/5.0"}
-
-            print(f"Downloading {Path(image_path).name}...")
-
-            response = requests.get(url, headers=headers)
-            image = Image.open(io.BytesIO(response.content))
-
-            filename = f"{Path(image_path).stem}.png"
-
-            self.save_image(image, filename)
-            return image
-
-        except PIL.UnidentifiedImageError:
-            try:
-                return Image.open(image_path)
-            except FileNotFoundError:
-                return Image.open(f"{Path(image_path).stem}.png")
-        '''
-
-    def save_image(self, image, filename):
-        image.save(IMAGE_PATH / filename)
-
 
 
 
@@ -480,6 +409,7 @@ def parse_args(argv=None):
     parser.add_argument("--card-backs", action="store_true", default=p.card_backs_default)
     parser.add_argument("--no-bleed", action="store_true", default=p.no_bleed_default)
     parser.add_argument("--always-bleed", action="store_true", default=p.always_bleed_default)
+    parser.add_argument("--save-as-pdf", action="store_true", default=p.save_as_pdf_default)
 
     parser.add_argument(
         "-q", "--quality",
@@ -530,6 +460,10 @@ def handle_errors(args):
         print("#######################################################################################")
         print("--always-bleed is True but bleed is set to 0. Consider using --no_bleed")
         print("#######################################################################################")
+
+    if args.page_size.lower() != "a4" and args.save_as_pdf:
+        print("Saving as a .pdf is only available for A4. This is due to size restrictions on the .pdf format.")
+        sys.exit(1)
 
 def convert_mm_to_pixels(card_width, mm):
     """Converts from millimetres to pixels on the page. The card width is a known
@@ -886,6 +820,9 @@ def add_card_to_page(batch, cards, page, page_back):
         if card.instances <= 0:
             cards.remove(card)
 
+def save_pages_as_pdf(fronts, backs):
+    images = [front.page for front in fronts] + [back.page for back in backs]
+    images[0].save(PAGE_PATH / "cards.pdf", save_all=True, append_images=images[1:])
 
 def create_pages(args, cards):
     """Creates pages and populates them with card images, then saves them as a jpg.
@@ -894,6 +831,10 @@ def create_pages(args, cards):
         args (ArgumentParser): Object containing command-line arguments.
         cards (list of Card): list of Card objects
     """
+    if args.save_as_pdf:
+        pages = []
+        backs = []
+
     page = Page(args)
     page_back = Page(args, is_back=True)
 
@@ -907,20 +848,40 @@ def create_pages(args, cards):
         add_card_to_page(batch, cards, page, page_back)
 
         if page.is_full:
-            print()
-            print(f"Saving page {page_count}... ", end="", flush=True)
-            save_pages(page, page_back, page_count)
-            print("Saved!")
-            print()
+            if not args.save_as_pdf:
+                print()
+                print(f"Saving page {page_count}... ", end="", flush=True)
+                save_pages(page, page_back, page_count)
+                print("Saved!")
+                print()
 
-            page_count += 1
+                page_count += 1
+            else:
+                pages.append(page)
+                if page.has_back:
+                    backs.append(page_back)
+
+                page = Page(args)
+                page_back = Page(args, is_back=True)
+
+                page_count += 1
+                print()
+
 
         batch = batch_cards(cards, page)
 
     if not page.is_empty:
-        print(f"Saving page {page_count}... ", end="")
-        save_pages(page, page_back, page_count)
-        print("Saved!")
+        if not args.save_as_pdf:
+            print(f"Saving page {page_count}... ", end="")
+            save_pages(page, page_back, page_count)
+            print("Saved!")
+        else:
+            pages.append(page)
+            if page.has_back:
+                backs.append(page_back)
+
+    if args.save_as_pdf:
+        save_pages_as_pdf(pages, backs)
 
 
 def main(argv=None):

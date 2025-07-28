@@ -1,5 +1,5 @@
 # Resolution
-card_width_high = 3326
+card_width_high = 3000
 card_width_medium = int(card_width_high / 2)
 card_width_low = int(card_width_high / 4)
 
@@ -35,6 +35,8 @@ no_bleed_default = False
 
 #Always add bleed
 always_bleed_default = False
+
+save_as_pdf_default = False
 
 # Dimension Ratios
 card_ratio = 1.3968
