@@ -367,6 +367,10 @@ class Card:
             except AttributeError:
                 self.id_back = self.back_xml.text
                 self.name_back = "Card Back"
+                self.print_name_back = "Card Back"
+                self.image_name_back = f"Card Back ({self.id_back}).jpg"
+                self.image_path_back = IMAGE_PATH / self.image_name_back
+                self.image_back = None
             if set(self.id_back) == set("x"):
                 self.has_bleed_back = False
             else:
@@ -621,6 +625,8 @@ def add_extra_images(cards):
             continue
         if "Zone.Identifier" in image:
             continue
+        if "Card Back" in image:
+            continue
 
         #Regex: any chars within () at the end of the string
         id_regex = r"(?<=\()(?=[^\(])[^()]*(?=\)$)"
@@ -667,7 +673,8 @@ def delete_removed_cards():
             continue
         if "Zone.Identifier" in image:
             continue
-
+        if "Card Back" in image:
+            continue
         try:
             id = re.findall(id_regex, image)[0]
             image_ids.append(id)
@@ -749,7 +756,7 @@ def create_cards(args):
     add_extra_images(card_objs)
 
     #Asynchronously load card images - downloading if necessary. 
-    asyncio.run(find_images(card_objs))
+    asyncio.run(find_images(card_objs, args))
 
     #Place all cards with backs first, minimising the number of 2-sided pages.
     return sorted(card_objs, key=lambda x: x.has_back, reverse=True)

@@ -38,18 +38,22 @@ def get_image_from_disk(card, back=False):
 
 
     ppath = Path(image_path)
-    fallback_path = Path(f"{ppath.parent / ppath.stem}.png")
+    fallback_paths = [
+            Path(f"{ppath.parent / ppath.stem}.png"),
+            Path(f"{ppath.parent / ppath.stem}.jpg")
+    ]
 
-    if fallback_path not in paths:
-        paths.append(fallback_path)
+    for fallback_path in fallback_paths:
+        if fallback_path not in paths:
+            paths.append(fallback_path)
 
     for path in paths:
         try:
             Image.open(path).verify()
             if not back:
-                card.image = Image.open(path).convert('RGB')
+                card.image = Image.open(path)
             else:
-                card.image_back = Image.open(path).convert('RGB')
+                card.image_back = Image.open(path)
 
         except FileNotFoundError:
             continue
@@ -100,7 +104,7 @@ async def handle_image_response(response, card, progress, task_id, back=False):
     except PIL.UnidentifiedImageError:
         raise Exception(f"{response.status}. Expected data: {total}. Actual data: {len(data)}")
 
-    filename = f"{Path(image_path).stem}.png"
+    filename = f"{Path(image_path).stem}.jpg"
     await save_image(image, filename)
 
     if not back:
@@ -172,7 +176,7 @@ async def download_image(session, card, progress, task_id, back=False):
         raise Exception(f"Unable to retireve image for {card}")
 
 
-async def find_images(cards):
+async def find_images(cards, args):
     """
     Get images for each card, either by loading from IMAGE_PATH if it exists 
     and then asynchronously downloading and saving the image otherwise. 
@@ -209,7 +213,15 @@ async def find_images(cards):
 
                 if card.has_back:
                     if card.image_back is None:
+                        if card.name_back in [t.description for t in progress.tasks]:
+                            continue
                         task_id = progress.add_task(card.name_back, name=card.name_back, visible=False)
                         tasks.append(download_image(session, card, progress, task_id, back=True))
 
             await asyncio.gather(*tasks)
+
+    if args.card_backs:
+        for card in cards:
+            if card.image_back is None:
+                card.image_back = Image.open(IMAGE_PATH / card.image_path_back)
+
