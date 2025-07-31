@@ -7,6 +7,8 @@ from PIL import Image
 from pathlib import Path
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeRemainingColumn, DownloadColumn
 
+import params as p
+
 ROOT = Path(__file__).resolve().parent.parent
 IMAGE_PATH = Path(ROOT / "data/images")
 PAGE_PATH = Path(ROOT / "pages")
@@ -61,7 +63,6 @@ async def save_image(image, filename):
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, image.save, IMAGE_PATH / filename)
 
-
 async def handle_image_response(response, card, progress, task_id, back=False):
     """
     Save image from response peicewise and update progress bar.
@@ -73,6 +74,9 @@ async def handle_image_response(response, card, progress, task_id, back=False):
         task_id (int): id for progress bar
         back (bool): True if handling backside of card
     """
+    if response.status != 200:
+        raise Exception(f"HTTP error: {response.status} for {response.url}")
+
     if not back:
         image_path = card.image_path
     else:
@@ -88,10 +92,13 @@ async def handle_image_response(response, card, progress, task_id, back=False):
         data.extend(chunk)
         progress.advance(task_id, advance=len(chunk))
 
+    if len(data) < total:
+        return "retry"
+
     try:
         image = Image.open(io.BytesIO(data)).convert('RGB')
     except PIL.UnidentifiedImageError:
-        raise Exception(f"{response.status}")
+        raise Exception(f"{response.status}. Expected data: {total}. Actual data: {len(data)}")
 
     filename = f"{Path(image_path).stem}.png"
     await save_image(image, filename)
@@ -102,7 +109,7 @@ async def handle_image_response(response, card, progress, task_id, back=False):
         card.image_back = image
 
     progress.update(task_id, visible=False)
-    return
+    return 
 
 
 async def download_image(session, card, progress, task_id, back=False):
@@ -124,27 +131,46 @@ async def download_image(session, card, progress, task_id, back=False):
 
     url = f"{url_base}&id={card_id}"
     await asyncio.sleep(1)
-    async with session.get(url) as initial_response:
-        response_type = initial_response.headers.get("Content-Type", "")
-        if "image" in response_type:
-            return await handle_image_response(initial_response, card, progress, task_id, back=back)
-        else:
-            html = await initial_response.text()
+    for attempt in range(p.MAX_DOWNLOAD_RETRIES):
+        async with session.get(url) as initial_response:
+            response_type = initial_response.headers.get("Content-Type", "")
+            if "image" in response_type:
+                result = await handle_image_response(initial_response, card, progress, task_id, back=back)
+                if result == "retry":
+                    await asyncio.sleep(1)
+                    continue
+                else:
+                    return result
+            else:
+                html = await initial_response.text()
 
-        #Sometimes response is a html page asking for confirmation. aiohttp doesn't automatically
-        #handle redirects, so handle them here.
-        confirm_token = None
-        match = re.search(r"confirm=([0-9A-Za-z_]+)", html)
-        if match:
-            confirm_token = match.group(1)
+            #Sometimes response is a html page asking for confirmation. aiohttp doesn't automatically
+            #handle redirects, so handle them here.
+            confirm_token = None
+            match = re.search(r"confirm=([0-9A-Za-z_]+)", html)
+            if match:
+                confirm_token = match.group(1)
 
-        if confirm_token:
-            confirm_url = f"{url_base}&confirm={confirm_token}&id={card_id}"
-            cookies = initial_response.cookies
-            async with session.get(confirm_url, cookies=cookies) as response:
-                return await handle_image_response(response, card, progress, task_id, back=back)
-        else:
-            return await handle_image_response(initial_response, card, progress, task_id, back=back)
+            if confirm_token:
+                confirm_url = f"{url_base}&confirm={confirm_token}&id={card_id}"
+                cookies = initial_response.cookies
+                async with session.get(confirm_url, cookies=cookies) as response:
+                    result = await handle_image_response(response, card, progress, task_id, back=back)
+                    if result == "retry":
+                        await asyncio.sleep(1)
+                        continue
+                    else:
+                        return result
+            else:
+                result = await handle_image_response(initial_response, card, progress, task_id, back=back)
+                if result == "retry":
+                    await asyncio.sleep(1)
+                    continue
+                else:
+                    return result
+    else:
+        raise Exception(f"Unable to retireve image for {card}")
+
 
 async def find_images(cards):
     """

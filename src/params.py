@@ -45,6 +45,7 @@ page_ratio = 1.4142135623730  # sqrt(2)
 MAX_PAGE_SIZE_NUMBER = 7
 MIN_PAGE_SIZE_NUMBER = 0
 
+MAX_DOWNLOAD_RETRIES = 3
 
 def get_page_widths(page_size):
     """Calculates the width of a given A, B, or C series paper size.
