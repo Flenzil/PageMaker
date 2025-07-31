@@ -45,9 +45,9 @@ def get_image_from_disk(card, back=False):
         try:
             Image.open(path).verify()
             if not back:
-                card.image = Image.open(path)
+                card.image = Image.open(path).convert('RGB')
             else:
-                card.image_back = Image.open(path)
+                card.image_back = Image.open(path).convert('RGB')
 
         except FileNotFoundError:
             continue
@@ -89,7 +89,7 @@ async def handle_image_response(response, card, progress, task_id, back=False):
         progress.advance(task_id, advance=len(chunk))
 
     try:
-        image = Image.open(io.BytesIO(data))
+        image = Image.open(io.BytesIO(data)).convert('RGB')
     except PIL.UnidentifiedImageError:
         raise Exception(f"{response.status}")
 

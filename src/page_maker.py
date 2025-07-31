@@ -170,10 +170,10 @@ class Page:
                 (
                     self.card_width + 2 * self.mpcfill_bleed,
                     self.card_height + 2 * self.mpcfill_bleed,
-                )
+                ), Image.LANCZOS
             )
         else:
-            return image.resize((self.card_width, self.card_height))
+            return image.resize((self.card_width, self.card_height), Image.LANCZOS)
 
     def crop_image(self, image, keep_bleed=False, has_bleed=True):
         """Crops the bleed that MPCFill adds to cards
@@ -764,14 +764,21 @@ def batch_cards(cards, page):
         page (Page): Page object containing card fronts
     """
     batch = []
+    page_has_back = False
     for card in cards:
         for _ in range(card.instances):
             batch.append(card)
             if card.has_back:
-                page.has_back = True
-                page.calculate_rows_and_cols()
+                page_has_back = True
             if len(batch) >= page.rows * page.columns:
-                return batch[:page.rows * page.columns]
+                break
+        if len(batch) >= page.rows * page.columns:
+            break
+
+    if page_has_back:
+        page.has_back = True
+        page.calculate_rows_and_cols()
+
     return batch
 
 
@@ -820,6 +827,7 @@ def add_card_to_page(batch, cards, page, page_back):
         if card.instances <= 0:
             cards.remove(card)
 
+            
 def save_pages_as_pdf(fronts, backs):
     images = [front.page for front in fronts] + [back.page for back in backs]
     images[0].save(PAGE_PATH / "cards.pdf", save_all=True, append_images=images[1:])
