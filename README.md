@@ -4,10 +4,10 @@ PageMaker is a Python script that formats MTG cards into printable pages. Design
 
 ## Features
 - Automatically download card images from `.xml` data.
-- Automatically arranges cards into a grid on standard paper sizes (e.g A4, B5, C3 etc.)
+- Automatically arranges cards into a grid on standard paper sizes (e.g `A4`, `B5`, `C3` etc.)
 - Supports double sided cards and can optionally include generic back on every card.
 - Limited support for cards from other sources - just pop them into the images folder.
-- Outputs pages into .jpg image files.
+- Outputs pages into .jpg image files or optionally as a single `.pdf` (currently only available for `A4` page size due to size limitations on the `.pdf` format).
 - Flexible page layout; allows you to control the spacing, margins, bleed and image brightness.
 
 ## Requirements
@@ -55,6 +55,7 @@ Developers can create a `params_local.py` in the root folder to override paramet
 |--crop-mark-size    |            |Size of crop marks shown when bleed is retained. Useful for cutting alignment.| `0.75mm` |
 |--no-bleed    |            |Never add bleed to any card| `False` |
 |--always-bleed   |            |Always add bleed to every card| `False` |
+|--save-as-pdf   |            |Save images as a single `.pdf` file rather than seperate `.jpg` images| `False` |
 
 
 Example:
