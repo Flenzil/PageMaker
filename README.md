@@ -14,6 +14,8 @@ PageMaker is a Python script that formats MTG cards into printable pages. Design
 - `python 3.4+`
 - `pillow 10.4.0`
 - `requests 2.32.4`
+- `aiohttp 3.12.14`
+- `rich 14.0.0`
 
 Install dependencies with:
 ```
