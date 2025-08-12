@@ -16,9 +16,8 @@ prompt_toolkit==3.0.51
 propcache==0.3.2
 pyasn1==0.6.1
 Pygments==2.19.2
-PyQt5-Qt5==5.15.17
+PyQt5-Qt5>=5.15.0
 PyQt5_sip==12.17.0
-PySimpleGUI==5.0.10
 questionary==2.1.0
 requests==2.32.4
 rich==14.0.0
