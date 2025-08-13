@@ -132,48 +132,57 @@ async def download_image(session, card, progress, task_id, back=False):
     else:
         card_id = card.id_back
     url_base = "https://drive.google.com/uc?export=download"
-
     url = f"{url_base}&id={card_id}"
+    backoff_mult = 1.5
+
     await asyncio.sleep(1)
+
     for attempt in range(p.MAX_DOWNLOAD_RETRIES):
-        async with session.get(url) as initial_response:
-            response_type = initial_response.headers.get("Content-Type", "")
-            if "image" in response_type:
-                result = await handle_image_response(initial_response, card, progress, task_id, back=back)
-                if result == "retry":
-                    await asyncio.sleep(1)
-                    continue
+        try:
+            async with session.get(url) as initial_response:
+                response_type = initial_response.headers.get("Content-Type", "")
+                if "image" in response_type:
+                    result = await handle_image_response(initial_response, card, progress, task_id, back=back)
+                    if result == "retry":
+                        await asyncio.sleep(backoff_mult ** attempt)
+                        continue
+                    else:
+                        return result
                 else:
-                    return result
-            else:
-                html = await initial_response.text()
+                    html = await initial_response.text()
 
-            #Sometimes response is a html page asking for confirmation. aiohttp doesn't automatically
-            #handle redirects, so handle them here.
-            confirm_token = None
-            match = re.search(r"confirm=([0-9A-Za-z_]+)", html)
-            if match:
-                confirm_token = match.group(1)
+                #Sometimes response is a html page asking for confirmation. aiohttp doesn't automatically
+                #handle redirects, so handle them here.
+                confirm_token = None
+                match = re.search(r"confirm=([0-9A-Za-z_]+)", html)
+                if match:
+                    confirm_token = match.group(1)
 
-            if confirm_token:
-                confirm_url = f"{url_base}&confirm={confirm_token}&id={card_id}"
-                cookies = initial_response.cookies
-                async with session.get(confirm_url, cookies=cookies) as response:
-                    result = await handle_image_response(response, card, progress, task_id, back=back)
+                if confirm_token:
+                    confirm_url = f"{url_base}&confirm={confirm_token}&id={card_id}"
+                    cookies = initial_response.cookies
+                    async with session.get(confirm_url, cookies=cookies) as response:
+                        result = await handle_image_response(response, card, progress, task_id, back=back)
+                        if result == "retry":
+                            await asyncio.sleep(1)
+                            continue
+                        else:
+                            return result
+                else:
+                    result = await handle_image_response(initial_response, card, progress, task_id, back=back)
                     if result == "retry":
                         await asyncio.sleep(1)
                         continue
                     else:
                         return result
+        except WindowsError as e:
+            if "semaphore timeout" in str(e):
+                await asyncio.sleep(min(backoff_mult ** attempt, max_backoff:=30))
+                continue
             else:
-                result = await handle_image_response(initial_response, card, progress, task_id, back=back)
-                if result == "retry":
-                    await asyncio.sleep(1)
-                    continue
-                else:
-                    return result
+                raise(e)
     else:
-        raise Exception(f"Unable to retireve image for {card}")
+        raise Exception(f"Unable to retrieve image for {card}")
 
 
 async def find_images(cards, args):
