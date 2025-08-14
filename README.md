@@ -12,9 +12,10 @@ PageMaker is a Python script that formats MTG cards into printable pages. Design
 
 ## Requirements
 - `python 3.4+`
-- `pillow 10.4.0`
+- `pillow 10.4.0` 
 - `requests 2.32.4`
 - `aiohttp 3.12.14`
+- `questionary 2.1.0`
 - `rich 14.0.0`
 
 Install dependencies with:
@@ -25,10 +26,17 @@ pip install -r requirements.txt
 ## Usage
 1. Download `cards.xml` from your MPCFIll project and put it into `data/xml`.
 2. Put any extra card images you'd like added to the pages into the `data/images` folder.
-3. Navigate to the `page_maker/` folder
+3. Navigate to the `PageMaker/` folder
 4. Run the script:
+
+Linux:
 ```
 python3 src/page_maker.py
+```
+
+Windows:
+```
+python src/page_maker.py
 ```
 
 The script will download images from `cards.xml` into `data/images`. It will also add any cards that don't have ids (i.e the cards you added to `data/images`)
