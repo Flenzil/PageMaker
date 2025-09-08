@@ -1,3 +1,12 @@
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parent.parent
+IMAGE_PATH = Path(ROOT / "data/images")
+CUSTOM_IMAGE_PATH = Path(ROOT / "data/custom images")
+PAGE_PATH = Path(ROOT / "pages")
+XML_PATH = Path(ROOT / "data/xml")
+
 # Resolution
 card_width_high = 3000
 card_width_medium = int(card_width_high / 2)
@@ -8,8 +17,8 @@ card_width_low = int(card_width_high / 4)
 card_width_in_mm = 63
 spacing_default = 0.1
 bleed_default = 3.175
-margin_w_min = 1
-margin_h_min = 1
+margin_x_min = 1
+margin_y_min = 1
 crop_mark_size_default = 0.75
 crop_mark_border_size_default = 0.2
 
@@ -47,21 +56,6 @@ MIN_PAGE_SIZE_NUMBER = 0
 
 MAX_DOWNLOAD_RETRIES = 3
 
-def get_page_widths(page_size):
-    """Calculates the width of a given A, B, or C series paper size.
-
-    All A, B and C series paper share the same height-width ratio: sqrt(2).
-    This function computes the width of any page size by scaling from known
-    base width (A4, B4, C4 to minimise computation for most common types).
-
-    Args:
-        page_size (str): Page size in form of A4, C5 etc.
-    """
-
-    page_widths = {"a": 210, "b": 250, "c": 229}
-    series = page_size[0].lower()
-    step_from_base = 4 - int(page_size[1]) #A4 = 0, B3 = 1, C5 = -1 etc.
-    return int(page_widths[series] * pow(pow(2, 0.5), step_from_base))
 
 try:
     from params_local import * #NOQA
