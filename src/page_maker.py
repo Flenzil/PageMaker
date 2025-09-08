@@ -435,7 +435,8 @@ def populate_pages(args: CLIArgs, cards: list[Card]):
     if args.save_as_pdf:
         save_pages_as_pdf(pages)
     else:
-        save_pages(pages[-1], str(current_page))
+        if current_page <= len(pages):
+            save_pages(pages[-1], str(current_page))
 
 
 def main(argv=None):
