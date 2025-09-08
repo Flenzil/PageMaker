@@ -58,6 +58,6 @@ MAX_DOWNLOAD_RETRIES = 3
 
 
 try:
-    from params_local import * #NOQA
+    from src.params_local import * #NOQA
 except ImportError:
     pass

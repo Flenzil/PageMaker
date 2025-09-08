@@ -147,8 +147,11 @@ class Page():
         '''Adjust brightness of card image'''
         if self.brightness_adjust == 1:
             return image
-        enhancer = ImageEnhance.Brightness(image)
-        return enhancer.enhance(self.brightness_adjust)
+
+        lut = [min(255, int(i * self.brightness_adjust)) for i in range(256)] * 3
+        image = image.point(lut)
+
+        return image
 
 
     def paste_position(self, current_col: int) -> tuple[int, int]:
@@ -242,7 +245,6 @@ class Page():
     def adjust_image(self, image: PILImageType, has_bleed: bool) -> PILImageType:
         '''Resize, crop and brighten card image.'''
         image = self.transform_image(image, has_bleed=has_bleed)
-        image = self.adjust_brightness(image)
         return image
 
 
@@ -333,6 +335,7 @@ class Page():
         if self.has_back:
             if self.back is not None:
                 self.back = self.adjust_brightness(self.back)
+
                 self.back.save(
                     f"{filename.parent / filename.stem}_back{filename.suffix}",
                     subsampling=0,
