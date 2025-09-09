@@ -1,9 +1,11 @@
 import asyncio
+from http.cookies import SimpleCookie
 import aiohttp
 import aiofiles
 import io
 import PIL
 import re
+import base64
 
 from PIL import Image
 from PIL.Image import Image as PILImageType
@@ -12,6 +14,7 @@ from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeRe
 from src.card import Card
 
 import src.params as params
+import src.helpers as helpers
 
 '''
 This script handles downloading, verifying and assigning images to
@@ -29,6 +32,7 @@ def get_image_from_disk(card: Card, is_back: bool=False) -> PILImageType|None:
         back (bool): True if loading backside image.
 
     '''
+    params.IMAGE_PATH.mkdir(exist_ok=True)
     if is_back:
         image_path = card.image_path_back
     else:
@@ -74,20 +78,27 @@ async def save_image(image: bytearray, card: Card, is_back: bool=False):
 
 
 async def update_progess_bar(
-    response: aiohttp.ClientResponse, progress: Progress, task_id: TaskID, total: int
+    response: aiohttp.ClientResponse, progress: Progress, task_id: TaskID, total: int, decode: bool
 ) -> bytearray:
     '''
     Extract image from response peicewise and update progress bar.
     '''
     progress.update(task_id, total=total, visible=True)
-    CHUNK_SIZE = 1024 * 64
+    CHUNK_SIZE = 1024 * 256
     data = bytearray()
     async for chunk in response.content.iter_chunked(CHUNK_SIZE):
+
         if not chunk:
             return data
+
         data.extend(chunk)
+
         progress.advance(task_id, advance=len(chunk))
-    return data
+
+    if decode:
+        return bytearray(base64.b64decode(data))
+    else:
+        return data
 
 
 async def limited_download(
@@ -124,23 +135,30 @@ async def get_image_from_download_or_disk(
         return {card.id : card_image}
 
 
-async def handle_confirmation_page_response(response: aiohttp.ClientResponse) -> str:
+def handle_confirmation_page_response(response: aiohttp.ClientResponse, url: str) -> tuple[str, SimpleCookie]:
     '''Find confirmation token within confirmation page'''
-    html = await response.text()
+
+    cookies = response.cookies
+    html = response.text()
     match = re.search(r'confirm=([0-9A-Za-z_]+)', str(html))
     if match:
         confirm_token = match.group(1)
-        return confirm_token
+        url = ''.join([url, f'&confirm={confirm_token}'])
+        return url, cookies
     else:
         raise Exception('Unable to handle non-image response')
 
 
-async def handle_quota_exceeded_response(card: Card, quota_exceeded: list[Card]) -> list[Card]:
-    return quota_exceeded + [card]
+def handle_quota_exceeded_response(card_id: str) -> tuple[str, bool]:
+    '''Switch to Google Script end point as a fall back'''
+    url_base = 'https://script.google.com/macros/s/AKfycbw8laScKBfxda2Wb0g63gkYDBdy8NWNxINoC4xDOwnCQ3JMFdruam1MdmNmN4wI5k4/exec'
+    url = f'{url_base}?id={card_id}'
+    decode = True
+    return url, decode
 
 
 async def handle_image_response(
-    response: aiohttp.ClientResponse, progress: Progress, task_id: TaskID
+    response: aiohttp.ClientResponse, progress: Progress, task_id: TaskID, decode: bool
 ) -> bytearray|None:
 
     '''
@@ -151,20 +169,18 @@ async def handle_image_response(
         progress (Progress): Progress bar object used to display download progress
         task_id (int): id for progress bar
     '''
-    if response.status != 200:
-        raise Exception(f'HTTP error: {response.status} for {response.url}')
+
+    if decode:
+        data = await response.read()
+        return bytearray(base64.b64decode(data))
 
     total = int(response.headers.get('Content-Length', 0))
-    data = await update_progess_bar(response, progress, task_id, total)
+    data = await update_progess_bar(response, progress, task_id, total, decode)
 
     if len(data) < total:
         return None
 
-    try:
-        #return Image.open(io.BytesIO(data)).convert('RGB')
-        return data
-    except PIL.UnidentifiedImageError:
-        raise Exception(f'{response.status}. Expected data: {total}. Actual data: {len(data)}')
+    return data
 
 
 async def download_image(session: aiohttp.ClientSession, card: Card, progress: Progress, task_id: TaskID, is_back: bool=False) -> bytearray|None:
@@ -192,7 +208,7 @@ async def download_image(session: aiohttp.ClientSession, card: Card, progress: P
     MAX_BACKOFF = 30
     backoff_mult = 1.5
     cookies = None
-    quota_exceeded = []
+    decode = False
 
     headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
@@ -203,12 +219,19 @@ async def download_image(session: aiohttp.ClientSession, card: Card, progress: P
     for attempt in range(params.MAX_DOWNLOAD_RETRIES):
         try:
             async with session.get(url, cookies=cookies, headers=headers) as response:
+
                 if response.status != 200:
-                    raise Exception(response)
+                    raise Exception(f'HTTP error: {response.status} for {response.url}')
+
                 response_type = response.headers.get('Content-Type', '')
-                if 'image' in response_type:
-                    #card_image = await handle_image_response(response, progress, task_id)
-                    card_data = await handle_image_response(response, progress, task_id)
+                if decode:
+                    image_type = helpers.detect_b64_image_type(await response.read())
+                    correct_response = image_type != 'Unknown'
+                else:
+                    correct_response = 'image' in response_type
+
+                if correct_response:
+                    card_data = await handle_image_response(response, progress, task_id, decode=decode)
 
                     if card_data is None:
                         await asyncio.sleep(backoff_mult ** attempt)
@@ -216,20 +239,23 @@ async def download_image(session: aiohttp.ClientSession, card: Card, progress: P
                     else:
                         progress.update(task_id, visible=False)
                         return card_data
-                else:
+
+                elif 'text' in response_type:
                     html = await response.text()
-                    if "Quota exceeded" in html:
-                        quota_exceeded = await handle_quota_exceeded_response(card, quota_exceeded)
-                        progress.update(task_id, visible=False)
-                        return None
+
+                    if 'Quota exceeded' in html:
+                        #Fall back to slower Google Script, provided by MPCFill
+                        url, decode = handle_quota_exceeded_response(card_id)
                     else:
                         #Sometimes response is a html page asking for confirmation. aiohttp doesn't automatically
                         #handle redirects, so handle them here.
-                        confirm_token = await handle_confirmation_page_response(response)
-                        url = f'{url_base}&confirm={confirm_token}&id={card_id}'
-                        cookies = response.cookies
-                        await asyncio.sleep(backoff_mult ** attempt)
-                        continue
+                        url, cookies = handle_confirmation_page_response(response, url)
+
+                    await asyncio.sleep(backoff_mult ** attempt)
+                    continue
+
+                else:
+                    raise Exception(f'Unable to parse response for {response.url}')
 
         except OSError as e:
             if 'semaphore timeout' in str(e):

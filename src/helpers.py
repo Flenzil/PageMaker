@@ -45,3 +45,21 @@ def get_all_images_from_folder(path: Path) -> list[str]:
 
 def ceiling_divide(a, b):
     return int(-(a // -b))
+
+
+def detect_b64_image_type(b64_data: bytes) -> str:
+    # Look at first ~12 characters of base64
+    prefix = b64_data[:12]
+    if prefix.startswith(b'iVBORw0K'):
+        return 'PNG'
+    if prefix.startswith(b'/9j/'):
+        return 'JPEG'
+    if prefix.startswith(b'R0lGOD'):
+        return 'GIF'
+    if prefix.startswith(b'Qk'):
+        return 'BMP'
+    if prefix.startswith(b'SU') or prefix.startswith(b'TU'):
+        return 'TIFF'
+    if prefix.startswith(b'UklGR'):
+        return 'WebP'
+    return 'Unknown'
