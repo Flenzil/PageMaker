@@ -49,6 +49,7 @@ class Card:
         return Card(
             instances=self.instances,
             slots=self.slots,
+
             name=self.name,
             id=self.id,
             has_bleed=self.has_bleed,
