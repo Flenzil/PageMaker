@@ -245,6 +245,7 @@ async def download_image(session: aiohttp.ClientSession, card: Card, progress: P
 
                     if 'Quota exceeded' in html:
                         #Fall back to slower Google Script, provided by MPCFill
+                        print(f'Download failed for {card}. Falling back to (slower) alternative method.')
                         url, decode = handle_quota_exceeded_response(card_id)
                     else:
                         #Sometimes response is a html page asking for confirmation. aiohttp doesn't automatically
