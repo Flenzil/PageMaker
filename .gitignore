@@ -4,4 +4,7 @@ __pycache__/
 *.xml
 pages/
 data/
+gui/
+dockerfile
+makefile
 params_local.py
