@@ -282,6 +282,38 @@ def assign_images_to_cards(cards: list[Card], card_images: dict[str, PILImageTyp
     return cards_with_images
 
 
+def combine_front_and_backs(fronts: list[Card], backs: list[Card], generic_back: Card|None = None) -> list[Card]:
+    '''
+    Combine Card objects describing the fron and the back of a card into one single
+    Card object using the `slots` parameter as the matching criterion.
+
+    Args:
+        fronts (list[Card]): list of Card objects representing front sides
+        backs (list[Card]): list of Card objects representing back sides
+        generic_back (Card|None): Card object representing the generic back side of the cards
+    Returns:
+        (list[Card]): list of Card objects with backs attached if applicable
+    '''
+    cards = []
+    for front in fronts:
+
+        back = next(
+            (b for b in backs if (set(front.slots) & set(b.slots))),
+            None 
+        )
+
+        if back is not None:
+            card = front // back
+        elif generic_back is not None:
+            card = front // generic_back
+        else:
+            card = front
+
+        cards.append(card)
+
+    return cards
+
+
 def create_cards(args: CLIArgs) -> list[Card]:
     '''Finds card information from .xml file and creates a list of Card objects
     from it.
@@ -293,6 +325,7 @@ def create_cards(args: CLIArgs) -> list[Card]:
         list[Card]: List of Card objects, each representing a unique card.
     '''
 
+    # Transform card data from xml elements to Card objects
     fronts, backs, generic_back = get_cards_info_from_xml(params.XML_PATH / 'cards.xml')
 
     # Load in cards from CUSTOM_IMAGE_PATH
@@ -301,31 +334,22 @@ def create_cards(args: CLIArgs) -> list[Card]:
     fronts = fronts + extra_fronts
     backs = backs + extra_backs
 
-    cards = []
-    for front in fronts:
+    # Transform fronts and backs into single card objects
+    if args.use_generic_card_backs:
+        cards = combine_front_and_backs(fronts, backs, generic_back=generic_back)
+    else:
+        cards = combine_front_and_backs(fronts, backs, generic_back=None)
 
-        back = next(
-            (b for b in backs if (set(front.slots) & set(b.slots))),
-            None 
-        )
-
-        if back:
-            card = front // back
-        elif args.use_generic_card_backs:
-            card = front // generic_back
-        else:
-            card = front
-
-        cards.append(card)
-
-    #Asynchronously load card images - downloading if necessary. 
+    # Asynchronously load card images - downloading if necessary. 
     card_images = get_images.get_card_images(cards)
 
+    # Extract the image for the generic back if present
     if args.use_generic_card_backs:
         generic_back_image = card_images.pop(generic_back.id)
     else:
         generic_back_image = None
 
+    # Add image to the Card objects
     cards = assign_images_to_cards(cards, card_images, generic_back_image=generic_back_image)
 
     #Place all cards with backs first, minimising the number of 2-sided pages.
