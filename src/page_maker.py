@@ -1,5 +1,4 @@
 import questionary
-import sys
 
 from pathlib import Path
 from src.page import Page 
@@ -54,6 +53,15 @@ def save_pages(page: Page, name: str):
     page.save_page(params.PAGE_PATH / f'{name}.jpg')
     print('Saved!')
     print()
+
+
+def create_xml(id, slots, name, query):
+    card = ET.Element("card")
+    ET.SubElement(card, "id").text = id
+    ET.SubElement(card, "slots").text = slots
+    ET.SubElement(card, "name").text = name
+    ET.SubElement(card, "query").text = query
+    return card
 
 
 def add_image_to_page_prompt(extra_images: list[str], cards: list[Card]) -> dict:
@@ -124,54 +132,55 @@ def add_extra_images(cards: list[Card]) -> tuple[list[Card], list[Card]]:
         if back == '':
             name = str(front)
             id = 'x' * x_count
-            slots = [str(slot_number)]
+            slots = str(slot_number)
 
-            card = Card(
-                name=Path(name).stem,
-                slots=slots,
-                instances=len(slots),
+            card_xml = create_xml(
                 id=id,
-                has_bleed=False,
-                image_path=params.CUSTOM_IMAGE_PATH / name
+                slots=slots,
+                name=name,
+                query=name
             )
+
+            card = CardParser(card_xml).extract_card()
             extra_cards.append(card)
 
         elif isinstance(front, str):
             name = str(back)
             id = 'x' * x_count
-            slots = next(card.slots for card in cards if card.id == front)
-            card = Card(
-                name=Path(name).stem,
-                slots=slots,
-                instances=len(slots),
+            slots = ",".join(next(card.slots for card in cards if card.id == front))
+            card_xml = create_xml(
                 id=id,
-                has_bleed=False,
-                image_path=params.CUSTOM_IMAGE_PATH / name
+                slots=slots,
+                name=name,
+                query=name
             )
+
+            card = CardParser(card_xml).extract_card()
             extra_backs.append(card)
 
         else:
             name = str(front)
             id = 'x' * x_count
-            slots = [str(slot_number)]
+            slots = str(slot_number)
             name_back = str(back)
             id_back = 'x' * x_count
-            card = Card(
-                name=Path(name).stem,
-                slots=slots,
-                instances=len(slots),
+
+            card_xml = create_xml(
                 id=id,
-                has_bleed=False,
-                image_path=params.CUSTOM_IMAGE_PATH / name
-            )
-            back = Card(
-                name=Path(name_back).stem,
                 slots=slots,
-                instances=len(slots),
-                id=id_back,
-                has_bleed=False,
-                image_path=params.CUSTOM_IMAGE_PATH / name
+                name=name,
+                query=name
             )
+
+            card_xml_back = create_xml(
+                id=id_back,
+                slots=slots,
+                name=name_back,
+                query=name_back
+            )
+
+            card = CardParser(card_xml).extract_card()
+            back = CardParser(card_xml_back).extract_card()
 
             extra_cards.append(card)
             extra_backs.append(back)
@@ -192,9 +201,6 @@ def create_card_dict(name: str|None, id: str|None, slots: str|None) -> dict:
         'query': name.lower()
     }
     return card
-
-def open_xml(xml):
-    return open(xml)
 
 
 def get_cards_info_from_xml(xml: Path) -> tuple[list[Card], list[Card], Card]:
@@ -238,14 +244,13 @@ def get_cards_info_from_xml(xml: Path) -> tuple[list[Card], list[Card], Card]:
     if generic_card_back_id_xml is None:
         raise Exception('Generic card back id is missing.')
     else:
-        generic_card_back = Card(
-            name="Generic card back",
+        generic_card_back_xml = create_xml(
             id=generic_card_back_id_xml,
-            has_bleed=True,
-            slots=["-1"],
-            instances=1,
-            image_path=params.IMAGE_PATH / f"Generic card back ({generic_card_back_id_xml}).jpg"
+            slots='-1',
+            name='Generic card back',
+            query='Generic card back'
         )
+        generic_card_back = CardParser(generic_card_back_xml).extract_card()
     return cards, backs, generic_card_back
 
 
