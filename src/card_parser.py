@@ -1,10 +1,12 @@
 from src.card import Card
 from pathlib import Path
 
+import xml.etree.ElementTree as ET
+
 import src.params as params
 
 class CardParser:
-    def __init__(self, card_data):
+    def __init__(self, card_data: ET.Element):
         self.card_xml = card_data
 
     def extract_card(self) -> Card:
@@ -19,17 +21,22 @@ class CardParser:
         return card
 
     def get_id(self) -> str:
-        id = self.card_xml.find("id")
-        if id is not None:
-            return self.card_xml.find("id").text
-        else:
-            raise Exception("ID missing")
+        id = self.card_xml.findtext("id")
+        if id is None:
+            raise Exception(f"ID missing from {self.get_name()}")
+        return id
 
     def get_name(self) -> str:
-         return self.card_xml.find("query").text.title()
+        name = self.card_xml.findtext("query")
+        if name is None:
+            raise Exception("A card is missing query data")
+        return name.title()
 
     def get_slots(self) -> list[str]:
-        return self.card_xml.find("slots").text.split(",")
+        slots = self.card_xml.findtext("slots")
+        if slots is None:
+            raise Exception(f"Slots data missing from {self.get_name()}")
+        return slots.split(",")
 
     def get_instances(self) -> int:
          return len(self.get_slots())
@@ -42,8 +49,12 @@ class CardParser:
         return True
 
     def get_image_path(self) -> Path:
-        image_name = Path(self.card_xml.find("name").text).stem
-        image_ext = Path(self.card_xml.find("name").text).suffix
+        image_name = self.card_xml.findtext("name")
+        if image_name is None:
+            raise Exception(f"Name data missing from {self.get_name()}")
+
+        image_name = Path(image_name).stem
+        image_ext = Path(image_name).suffix
         id = self.get_id()
         if set(id) == set("x"):
             return params.CUSTOM_IMAGE_PATH / f"{image_name}{image_ext}"
