@@ -6,9 +6,9 @@ import tests.mock_xmls as mock_xmls
 
 class TestCardParser(unittest.TestCase):
     def setUp(self):
-        self.test_xml = mock_xmls.xml_sol_ring()
-        self.test_xml_back = mock_xmls.xml_black_lotus()
-        self.test_xml_custom = mock_xmls.xml_custom_card()
+        self.test_xml = mock_xmls.MockXMLs().xml_sol_ring()
+        self.test_xml_back = mock_xmls.MockXMLs().xml_black_lotus()
+        self.test_xml_custom = mock_xmls.MockXMLs().xml_custom_card()
 
     def test_get_id(self):
         self.assertEqual(CardParser(self.test_xml).get_id(), "1234abcd")
@@ -62,6 +62,7 @@ class TestCardParser(unittest.TestCase):
         self.assertEqual(card.has_bleed_back, True) 
         self.assertEqual(card.image_path_back, params.IMAGE_PATH / "Black Lotus [alpha] (4567efgh).jpg") 
         self.assertEqual(card.has_back, True)
+
 
 if __name__ == "__main__":
     unittest.main()
