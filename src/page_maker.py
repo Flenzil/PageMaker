@@ -251,9 +251,10 @@ def get_cards_info_from_xml(xml: Path) -> tuple[list[Card], list[Card], Card]:
 
 def remove_old_images(exceptions: list[Card]):
     card_names = [card.name for card in exceptions]
-    for image in params.IMAGE_PATH.iterdir():
-        if image not in card_names:
-            image.unlink()
+    if params.IMAGE_PATH.is_dir():
+        for image in params.IMAGE_PATH.iterdir():
+            if image not in card_names:
+                image.unlink()
 
 
 def assign_images_to_cards(cards: list[Card], card_images: dict[str, PILImageType], generic_back_image: PILImageType|None = None):
