@@ -1,5 +1,4 @@
-pillow
-requests
+pillow-SIMD
 aiohttp
 aiofiles
 rich
