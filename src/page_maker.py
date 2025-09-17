@@ -249,6 +249,13 @@ def get_cards_info_from_xml(xml: Path) -> tuple[list[Card], list[Card], Card]:
     return cards, backs, generic_card_back
 
 
+def remove_old_images(exceptions: list[Card]):
+    card_names = [card.name for card in exceptions]
+    for image in params.IMAGE_PATH.iterdir():
+        if image not in card_names:
+            image.unlink()
+
+
 def assign_images_to_cards(cards: list[Card], card_images: dict[str, PILImageType], generic_back_image: PILImageType|None = None):
     '''
     Assigns card images to card objects, adding generic back image if given.
@@ -327,6 +334,9 @@ def create_cards(args: CLIArgs) -> list[Card]:
 
     # Transform card data from xml elements to Card objects
     fronts, backs, generic_back = get_cards_info_from_xml(params.XML_PATH / 'cards.xml')
+
+    # Remove images from a previous run except those that are shared with this run
+    remove_old_images(exceptions=fronts+backs)
 
     # Load in cards from CUSTOM_IMAGE_PATH
     extra_fronts, extra_backs = add_extra_images(fronts)
