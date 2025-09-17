@@ -1,5 +1,6 @@
 pillow
 requests
 aiohttp
+aiofiles
 rich
 questionary
