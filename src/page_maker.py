@@ -1,4 +1,5 @@
 import questionary
+import sys
 
 from pathlib import Path
 from src.page import Page 
@@ -192,6 +193,9 @@ def create_card_dict(name: str|None, id: str|None, slots: str|None) -> dict:
     }
     return card
 
+def open_xml(xml):
+    return open(xml)
+
 
 def get_cards_info_from_xml(xml: Path) -> tuple[list[Card], list[Card], Card]:
     '''
@@ -206,11 +210,14 @@ def get_cards_info_from_xml(xml: Path) -> tuple[list[Card], list[Card], Card]:
                                  or None if backs is absent
         generic_card_back (ET.Element): XML object containing information for generic back side of cards
     '''
-    with open(xml) as f:
-        root = ET.parse(f).getroot()
-        cards_xml = root.find('fronts')
-        backs_xml = root.find('backs')
-        generic_card_back_id_xml = root.findtext('cardback')
+    try:
+        with open(xml) as f:
+            root = ET.parse(f).getroot()
+            cards_xml = root.find('fronts')
+            backs_xml = root.find('backs')
+            generic_card_back_id_xml = root.findtext('cardback')
+    except ET.ParseError:
+        raise Exception('XML file is empty!')
 
     if cards_xml is None:
         raise Exception('No cards found.')
