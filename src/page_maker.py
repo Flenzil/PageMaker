@@ -247,10 +247,11 @@ def get_cards_info_from_xml(xml: Path) -> tuple[list[Card], list[Card], Card]:
         generic_card_back_xml = create_xml(
             id=generic_card_back_id_xml,
             slots='-1',
-            name='Generic card back',
+            name='Generic card back.jpg',
             query='Generic card back'
         )
         generic_card_back = CardParser(generic_card_back_xml).extract_card()
+
     return cards, backs, generic_card_back
 
 
@@ -258,18 +259,17 @@ def remove_old_images(exceptions: list[Card]):
     image_paths = [card.image_path for card in exceptions]
     if params.IMAGE_PATH.is_dir():
         for image in params.IMAGE_PATH.iterdir():
-            if image.with_suffix('') not in image_paths:
+            if image not in image_paths:
                 image.unlink()
 
 
-def assign_images_to_cards(cards: list[Card], card_images: dict[str, PILImageType], generic_back_image: PILImageType|None = None):
+def assign_images_to_cards(cards: list[Card], card_images: dict[str, PILImageType]):
     '''
     Assigns card images to card objects, adding generic back image if given.
 
     Args:
         cards (list[Card]): List of card objects containing card information
         card_images (dict[str, PILImageType]): dict mapping card IDs to their corresponding images
-        generic_back_image (PILImageType|None): Optional image for a generic card back applied to all cards
 
     Returns:
         (list[Card]): List of card objects now also containing their images
@@ -282,15 +282,8 @@ def assign_images_to_cards(cards: list[Card], card_images: dict[str, PILImageTyp
             continue
 
         image = card_images[card.id]
-        image_back = None
 
-        if card.has_back and card.id_back in card_images:
-            image_back = card_images[card.id_back]
-        else:
-            if generic_back_image is not None:
-                image_back = generic_back_image
-
-        cards_with_images.append(card.set_image(image, image_back=image_back))
+        cards_with_images.append(card.set_image(image))
 
     return cards_with_images
 
@@ -342,7 +335,7 @@ def create_cards(args: CLIArgs) -> list[Card]:
     fronts, backs, generic_back = get_cards_info_from_xml(params.XML_PATH / 'cards.xml')
 
     # Remove images from a previous run except those that are shared with this run
-    remove_old_images(exceptions=fronts+backs)
+    remove_old_images(exceptions=fronts+backs+[generic_back])
 
     # Load in cards from CUSTOM_IMAGE_PATH
     extra_fronts, extra_backs = add_extra_images(fronts)
@@ -350,23 +343,17 @@ def create_cards(args: CLIArgs) -> list[Card]:
     fronts = fronts + extra_fronts
     backs = backs + extra_backs
 
+    # Asynchronously load card images - downloading if necessary. 
+    card_images = get_images.get_card_images(fronts + backs + [generic_back])
+
+    # Add image to the Card objects
+    cards = assign_images_to_cards(fronts + backs + [generic_back], card_images)
+
     # Transform fronts and backs into single card objects
     if args.use_generic_card_backs:
         cards = combine_front_and_backs(fronts, backs, generic_back=generic_back)
     else:
         cards = combine_front_and_backs(fronts, backs, generic_back=None)
-
-    # Asynchronously load card images - downloading if necessary. 
-    card_images = get_images.get_card_images(cards)
-
-    # Extract the image for the generic back if present
-    if args.use_generic_card_backs:
-        generic_back_image = card_images.pop(generic_back.id)
-    else:
-        generic_back_image = None
-
-    # Add image to the Card objects
-    cards = assign_images_to_cards(cards, card_images, generic_back_image=generic_back_image)
 
     #Place all cards with backs first, minimising the number of 2-sided pages.
     return sorted(cards, key=lambda x: x.has_back, reverse=True)
@@ -475,6 +462,8 @@ def populate_pages(args: CLIArgs, cards: list[Card]):
             if page.is_full:
                 if not args.save_as_pdf:
                     save_pages(page, str(current_page))
+                else:
+                    print()
 
                 current_page += 1
                 continue

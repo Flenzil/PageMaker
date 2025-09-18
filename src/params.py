@@ -56,6 +56,9 @@ MIN_PAGE_SIZE_NUMBER = 0
 
 MAX_DOWNLOAD_RETRIES = 3
 
+download_chunk_size = 1024 * 256
+max_simultaneous_downloads = 10
+
 
 try:
     from src.params_local import * #NOQA

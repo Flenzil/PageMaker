@@ -53,10 +53,12 @@ class CardParser:
         if image_name is None:
             raise Exception(f"Name data missing from {self.get_name()}")
 
-        image_name = Path(image_name).stem
+
+        image_stem = Path(image_name).stem
         image_ext = Path(image_name).suffix
+
         id = self.get_id()
         if set(id) == set("x"):
-            return params.CUSTOM_IMAGE_PATH / f"{image_name}{image_ext}"
+            return params.CUSTOM_IMAGE_PATH / f"{image_stem}{image_ext}"
         else:
-            return params.IMAGE_PATH / f"{image_name} ({id}){image_ext}"
+            return params.IMAGE_PATH / f"{image_stem} ({id}){image_ext}"

@@ -1,164 +1,131 @@
 import asyncio
-from http.cookies import SimpleCookie
 import aiohttp
 import aiofiles
 import io
-import PIL
 import re
 import base64
 
 from PIL import Image
 from PIL.Image import Image as PILImageType
 from pathlib import Path
+from typing import Coroutine
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeRemainingColumn, DownloadColumn, TaskID
 from src.card import Card
 
 import src.params as params
 import src.helpers as helpers
+import src.exceptions as exceptions
 
 '''
-This script handles downloading, verifying and assigning images to
-card objects. Images are fetched from Google Drive, with support for 
-confirmation-token redirects and are saved locally. Images already in
-IMAGE_PATH are used whenever possible.
+This module provides asynchronous utilities for fetching and caching images
+used to represent cards. Images are sourced from Google Drive, with automatic
+handling of confirmation-token redirects and download quota limits. Images
+are cached locally in `params.IMAGE_PATH`, and any cached image will be
+reused to avoid redundant downloads.
 '''
 
-def get_image_from_disk(card: Card, is_back: bool=False) -> PILImageType|None:
+def open_and_load_image(path):
+    image = Image.open(path)
+    image.load()
+    return image
+
+
+async def get_image_from_disk(card: Card) -> PILImageType|None:
     '''
     Load in image from IMAGE_PATH if it exists and add it to card object.
 
     Args:
         card (Card): object containing card info.
-        back (bool): True if loading backside image.
 
+    Returns:
+        (PILImageType|None): Image of card or None if no image found on disk
     '''
     params.IMAGE_PATH.mkdir(exist_ok=True)
-    if is_back:
-        image_path = card.image_path_back
-    else:
-        image_path = card.image_path
-    paths = [image_path]
+    paths = [card.image_path]
 
-
-    ppath = Path(image_path)
-    fallback_paths = [
-            Path(f'{ppath.parent / ppath.stem}.png'),
-            Path(f'{ppath.parent / ppath.stem}.jpg'),
+    fallback_exts = [
+        '.jpg',
+        '.png',
+        '.jpeg',
+        '.tiff',
+        '.bmp',
+        '.gif',
+        '.webp'
     ]
 
-    for fallback_path in fallback_paths:
-        if fallback_path not in paths:
-            paths.append(fallback_path)
+    fallback_paths = [
+        card.image_path.with_suffix(ext)
+        for ext in fallback_exts
+    ]
+
+    paths = paths + fallback_paths
 
     for path in paths:
         try:
-            Image.open(path).verify()
-            return Image.open(path)
+            return await asyncio.to_thread(open_and_load_image, path)
 
         except FileNotFoundError:
             continue
+
         except OSError:
             #Truncated image, redownload image
             Path.unlink(path)
+            break
 
     return None
 
 
-async def save_image(image: bytearray, card: Card, is_back: bool=False):
-    '''Asynchronously save image to IMAGE_PATH'''
-    if is_back:
-        image_path = card.image_path_back
-    else:
-        image_path = card.image_path
-
-    filename = f'{Path(image_path).stem}.jpg'
-
-    async with aiofiles.open(params.IMAGE_PATH / filename, 'wb') as f:
-        await f.write(image)
-
-
 async def update_progess_bar(
-    response: aiohttp.ClientResponse, progress: Progress, task_id: TaskID, total: int, decode: bool
+    response: aiohttp.ClientResponse, progress: Progress, task_id: TaskID, total: int
 ) -> bytearray:
     '''
     Extract image from response peicewise and update progress bar.
     '''
     progress.update(task_id, total=total, visible=True)
-    CHUNK_SIZE = 1024 * 256
     data = bytearray()
-    async for chunk in response.content.iter_chunked(CHUNK_SIZE):
+    async for chunk in response.content.iter_chunked(params.download_chunk_size):
 
         if not chunk:
             return data
 
         data.extend(chunk)
-
         progress.advance(task_id, advance=len(chunk))
 
-    if decode:
-        return bytearray(base64.b64decode(data))
-    else:
-        return data
+    return data
 
 
-async def limited_download(
-    session: aiohttp.ClientSession,
-    semaphore: asyncio.Semaphore,
-    card: Card,
-    progress: Progress,
-    task_id: TaskID,
-    is_back: bool
-) -> bytearray|None:
-    async with semaphore:
-        return await download_image(session, card, progress, task_id, is_back)
-
-
-async def get_image_from_download_or_disk(
-    session: aiohttp.ClientSession, semaphore: asyncio.Semaphore, card: Card, progress: Progress, task_id: TaskID, is_back: bool=False
-) -> dict[str, PILImageType]:
-
-    '''Either retrieve image from disk or download image if not present'''
-
-    card_image = get_image_from_disk(card, is_back=is_back)
-
-    if card_image is None:
-        card_data = await limited_download(session, semaphore, card, progress, task_id, is_back=is_back)
-        if card_data is not None:
-            await save_image(card_data, card, is_back=is_back)
-            card_image = Image.open(io.BytesIO(card_data))
-        else:
-            card_image = Image.open(params.IMAGE_PATH.parent / "download_failed.jpg")
-
-    if is_back:
-        return {card.id_back : card_image}
-    else:
-        return {card.id : card_image}
-
-
-def handle_confirmation_page_response(response: aiohttp.ClientResponse, url: str) -> tuple[str, SimpleCookie]:
+def handle_confirmation_page_response(response_html: str, url: str) -> str:
     '''Find confirmation token within confirmation page'''
 
-    cookies = response.cookies
-    html = response.text()
-    match = re.search(r'confirm=([0-9A-Za-z_]+)', str(html))
+    match = re.search(r'confirm=([0-9A-Za-z_]+)', response_html)
     if match:
         confirm_token = match.group(1)
         url = ''.join([url, f'&confirm={confirm_token}'])
-        return url, cookies
+        return url
     else:
         raise Exception('Unable to handle non-image response')
 
 
-def handle_quota_exceeded_response(card_id: str) -> tuple[str, bool]:
+async def handle_quota_exceeded_response(session:aiohttp.ClientSession, card: Card, headers: dict) -> bytearray:
     '''Switch to Google Script end point as a fall back'''
+
+    print(f'Download failed for {card}. Falling back to (slower) alternative method.')
+
     url_base = 'https://script.google.com/macros/s/AKfycbw8laScKBfxda2Wb0g63gkYDBdy8NWNxINoC4xDOwnCQ3JMFdruam1MdmNmN4wI5k4/exec'
-    url = f'{url_base}?id={card_id}'
-    decode = True
-    return url, decode
+    url = f'{url_base}?id={card.id}'
+
+    async with session.get(url, headers=headers) as response:
+        data = await response.read()
+        image_type = helpers.detect_b64_image_type(await response.read())
+
+        if image_type != 'Unknown':
+            return bytearray(base64.b64decode(data))
+        else:
+            raise Exception('Scripts endpoint returned non-image data')
 
 
 async def handle_image_response(
-    response: aiohttp.ClientResponse, progress: Progress, task_id: TaskID, decode: bool
+    response: aiohttp.ClientResponse, progress: Progress, task_id: TaskID
 ) -> bytearray|None:
 
     '''
@@ -167,15 +134,11 @@ async def handle_image_response(
     Args:
         response (ClientResponse): The HTTP response object from aiohttp.
         progress (Progress): Progress bar object used to display download progress
-        task_id (int): id for progress bar
+        task_id (TaskID): id for progress bar
     '''
 
-    if decode:
-        data = await response.read()
-        return bytearray(base64.b64decode(data))
-
     total = int(response.headers.get('Content-Length', 0))
-    data = await update_progess_bar(response, progress, task_id, total, decode)
+    data = await update_progess_bar(response, progress, task_id, total)
 
     if len(data) < total:
         return None
@@ -183,7 +146,39 @@ async def handle_image_response(
     return data
 
 
-async def download_image(session: aiohttp.ClientSession, card: Card, progress: Progress, task_id: TaskID, is_back: bool=False) -> bytearray|None:
+async def handle_response(response: aiohttp.ClientResponse, progress: Progress, task_id:TaskID) -> bytearray:
+    '''
+    Attempts to extract image data from response. Raises various errors that are
+    handled in caller to trigger workarounds for various blockers e.g confirmation
+    needed page or exceeded quotas.
+    '''
+    if response.status != 200:
+        raise Exception(f'HTTP error: {response.status} for {response.url}')
+
+    response_type = response.headers.get('Content-Type', '')
+
+    if 'image' in response_type:
+        card_data = await handle_image_response(response, progress, task_id)
+
+        if card_data is None:
+            raise exceptions.NoImageDataException()
+        else:
+            progress.update(task_id, visible=False)
+            return card_data
+
+    elif 'text' in response_type:
+        html = await response.text()
+
+        if 'Quota exceeded' in html:
+            raise exceptions.QuotaExceededException()
+        else:
+            raise exceptions.ConfirmationNeededException()
+
+    else:
+        raise Exception(f'Unable to parse response for {response.url}')
+
+
+async def download_image(session: aiohttp.ClientSession, card: Card, progress: Progress, task_id: TaskID) -> bytearray|None:
     '''
     Get response from google drive to extract image, even if recieving a html page.
 
@@ -192,23 +187,17 @@ async def download_image(session: aiohttp.ClientSession, card: Card, progress: P
         card (Card): Object containing card information.
         progress (Progress): Progress bar object used to display download progress
         task_id (int): id for progress bar
-        is_back (bool): True if handling backside of card
 
     Returns:
-        (PILImageType): Image of card
+        (bytearray): Image data of card
     '''
 
-    if not is_back:
-        card_id = card.id
-    else:
-        card_id = card.id_back
     url_base = 'https://drive.google.com/uc?export=download'
-    url = f'{url_base}&id={card_id}'
+    url = f'{url_base}&id={card.id}'
 
     MAX_BACKOFF = 30
     backoff_mult = 1.5
     cookies = None
-    decode = False
 
     headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
@@ -217,58 +206,79 @@ async def download_image(session: aiohttp.ClientSession, card: Card, progress: P
     }
 
     for attempt in range(params.MAX_DOWNLOAD_RETRIES):
-        try:
-            async with session.get(url, cookies=cookies, headers=headers) as response:
+        async with session.get(url, cookies=cookies, headers=headers) as response:
+            try:
+                card_data = await handle_response(response, progress, task_id)
+                return card_data
 
-                if response.status != 200:
-                    raise Exception(f'HTTP error: {response.status} for {response.url}')
+            except exceptions.QuotaExceededException:
+                card_data = await handle_quota_exceeded_response(session, card, headers)
+                return card_data
 
-                response_type = response.headers.get('Content-Type', '')
-                if decode:
-                    image_type = helpers.detect_b64_image_type(await response.read())
-                    correct_response = image_type != 'Unknown'
+            except exceptions.ConfirmationNeededException:
+                cookies = response.cookies
+                html = await response.text()
+                url = handle_confirmation_page_response(html, url)
+
+            except exceptions.NoImageDataException:
+                pass
+
+            except asyncio.exceptions.TimeoutError:
+                pass
+
+            except OSError as e:
+                if 'semaphore timeout' in str(e):
+                    pass
                 else:
-                    correct_response = 'image' in response_type
+                    raise(e)
 
-                if correct_response:
-                    card_data = await handle_image_response(response, progress, task_id, decode=decode)
 
-                    if card_data is None:
-                        await asyncio.sleep(backoff_mult ** attempt)
-                        continue
-                    else:
-                        progress.update(task_id, visible=False)
-                        return card_data
-
-                elif 'text' in response_type:
-                    html = await response.text()
-
-                    if 'Quota exceeded' in html:
-                        #Fall back to slower Google Script, provided by MPCFill
-                        print(f'Download failed for {card}. Falling back to (slower) alternative method.')
-                        url, decode = handle_quota_exceeded_response(card_id)
-                    else:
-                        #Sometimes response is a html page asking for confirmation. aiohttp doesn't automatically
-                        #handle redirects, so handle them here.
-                        url, cookies = handle_confirmation_page_response(response, url)
-
-                    await asyncio.sleep(backoff_mult ** attempt)
-                    continue
-
-                else:
-                    raise Exception(f'Unable to parse response for {response.url}')
-
-        except OSError as e:
-            if 'semaphore timeout' in str(e):
-                await asyncio.sleep(min(backoff_mult ** attempt, MAX_BACKOFF))
-                continue
-            else:
-                raise(e)
-        except asyncio.exceptions.TimeoutError:
             await asyncio.sleep(min(backoff_mult ** attempt, MAX_BACKOFF))
             continue
+                    
     else:
         raise Exception(f'Unable to retrieve image for {card}')
+
+
+async def save_image(image: bytearray, card: Card):
+    '''Asynchronously save image to IMAGE_PATH'''
+    filename = card.image_path
+
+    async with aiofiles.open(filename, 'wb') as f:
+        await f.write(image)
+
+
+async def get_image_from_download_or_disk(
+    session: aiohttp.ClientSession, semaphore:asyncio.Semaphore, card: Card, progress: Progress, task_id: TaskID
+) -> dict[str, PILImageType]:
+
+    '''Either retrieve image from disk or download image if not present'''
+
+    await semaphore.acquire()
+
+    try:
+        card_image = await get_image_from_disk(card)
+
+        if card_image is None:
+            card_data = await download_image(session, card, progress, task_id)
+
+            if card_data is not None:
+                await save_image(card_data, card)
+                card_image = Image.open(io.BytesIO(card_data))
+                card_image.load()
+            else:
+                card_image = Image.open(params.IMAGE_PATH.parent / "download_failed.jpg")
+                card_image.load()
+
+        return {card.id : card_image}
+    finally:
+        semaphore.release()
+
+
+def create_task(
+    session: aiohttp.ClientSession, semaphore: asyncio.Semaphore, card: Card, progress: Progress, task_id: TaskID
+) -> list[Coroutine]:
+    return [get_image_from_download_or_disk(session, semaphore, card, progress, task_id)]
 
 
 async def find_images(cards: list[Card]) -> list[dict[str, PILImageType]]:
@@ -284,29 +294,22 @@ async def find_images(cards: list[Card]) -> list[dict[str, PILImageType]]:
         (list[dict]): List of card ids mapped to their corresponding images
     '''
 
+    progress_args = [
+        SpinnerColumn(),
+        TextColumn('[bold blue]{task.fields[name]}'),
+        BarColumn(),
+        DownloadColumn(),
+        TimeRemainingColumn()
+    ]
+
+    semaphore = asyncio.Semaphore(params.max_simultaneous_downloads)
+
     async with aiohttp.ClientSession() as session:
-        with Progress(
-            SpinnerColumn(),
-            TextColumn('[bold blue]{task.fields[name]}'),
-            BarColumn(),
-            DownloadColumn(),
-            TimeRemainingColumn(),
-            transient=True,
-            redirect_stdout=False,
-            redirect_stderr=False
-        ) as progress:
-            semaphore = asyncio.Semaphore(10)
+        with Progress(*progress_args, transient=True) as progress:
             tasks = []
             for card in cards:
                 task_id = progress.add_task(card.name, name=card.name, visible=False)
-                tasks.append(get_image_from_download_or_disk(session, semaphore, card, progress, task_id))
-
-                if card.has_back:
-                    if card.name_back in [t.description for t in progress.tasks]:
-                        # Skip downloading the same image multiple times e.g generic card back
-                        continue
-                    task_id = progress.add_task(card.name_back, name=card.name_back, visible=False)
-                    tasks.append(get_image_from_download_or_disk(session, semaphore, card, progress, task_id, is_back=True))
+                tasks += create_task(session, semaphore, card, progress, task_id)
 
             return await asyncio.gather(*tasks)
 
@@ -314,4 +317,5 @@ async def find_images(cards: list[Card]) -> list[dict[str, PILImageType]]:
 def get_card_images(cards: list[Card]) -> dict[str, PILImageType]:
     card_images = asyncio.run(find_images(cards))
     card_images_flattened = {name: img for d in card_images for name, img in d.items()}
+
     return card_images_flattened

@@ -46,6 +46,7 @@ class Card:
 
 
     def __floordiv__(self, other: 'Card') -> 'Card':
+
         return Card(
             instances=self.instances,
             slots=self.slots,
@@ -55,12 +56,14 @@ class Card:
             has_bleed=self.has_bleed,
             image_path=self.image_path,
             image=self.image,
+            has_image=self.has_image,
 
             name_back=other.name,
             id_back=other.id,
             has_bleed_back=other.has_bleed,
             image_path_back=other.image_path,
             image_back=other.image,
+            has_image_back=other.has_image,
 
             has_back=True
         )
