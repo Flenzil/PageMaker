@@ -2,7 +2,7 @@ import questionary
 
 from pathlib import Path
 from src.page import Page 
-from src.card import Card
+from src.card import Card, DoubleSidedCard
 from src.card_parser import CardParser
 from src.cli_args_manager import CLIArgsManager, CLIArgs
 from PIL.Image import Image as PILImageType
@@ -263,32 +263,27 @@ def remove_old_images(exceptions: list[Card]):
                 image.unlink()
 
 
-def assign_images_to_cards(cards: list[Card], card_images: dict[str, PILImageType]):
+def assign_images_to_cards(cards: list[Card], card_images: dict[str, PILImageType]) -> None:
     '''
     Assigns card images to card objects, adding generic back image if given.
 
     Args:
         cards (list[Card]): List of card objects containing card information
         card_images (dict[str, PILImageType]): dict mapping card IDs to their corresponding images
-
-    Returns:
-        (list[Card]): List of card objects now also containing their images
     '''
-    cards_with_images = []
 
     for card in cards:
 
+        # Skip custom cards whose images come from CUSTOM_IMAGE_PATH and not
+        # from get_images
         if card.id not in card_images:
             continue
 
         image = card_images[card.id]
-
-        cards_with_images.append(card.set_image(image))
-
-    return cards_with_images
+        card.set_image(image)
 
 
-def combine_front_and_backs(fronts: list[Card], backs: list[Card], generic_back: Card|None = None) -> list[Card]:
+def combine_front_and_backs(fronts: list[Card], backs: list[Card], generic_back: Card|None = None) -> list[DoubleSidedCard]:
     '''
     Combine Card objects describing the fron and the back of a card into one single
     Card object using the `slots` parameter as the matching criterion.
@@ -313,14 +308,14 @@ def combine_front_and_backs(fronts: list[Card], backs: list[Card], generic_back:
         elif generic_back is not None:
             card = front // generic_back
         else:
-            card = front
+            card = front // None
 
         cards.append(card)
 
     return cards
 
 
-def create_cards(args: CLIArgs) -> list[Card]:
+def create_cards(args: CLIArgs) -> list[DoubleSidedCard]:
     '''Finds card information from .xml file and creates a list of Card objects
     from it.
 
@@ -347,7 +342,7 @@ def create_cards(args: CLIArgs) -> list[Card]:
     card_images = get_images.get_card_images(fronts + backs + [generic_back])
 
     # Add image to the Card objects
-    cards = assign_images_to_cards(fronts + backs + [generic_back], card_images)
+    assign_images_to_cards(fronts + backs + [generic_back], card_images)
 
     # Transform fronts and backs into single card objects
     if args.use_generic_card_backs:
@@ -356,25 +351,25 @@ def create_cards(args: CLIArgs) -> list[Card]:
         cards = combine_front_and_backs(fronts, backs, generic_back=None)
 
     #Place all cards with backs first, minimising the number of 2-sided pages.
-    return sorted(cards, key=lambda x: x.has_back, reverse=True)
+    return sorted(cards, key=lambda x: x.back is not None, reverse=True)
 
 
-def add_card_to_page(card: Card, page: Page):
+def add_card_to_page(card: DoubleSidedCard, page: Page):
     '''Adds card image to page, also add back side of card to a seperate
     page, if applicable.
 
     Args:
-        card (Card): Card object containing card information
+        card (DoubleSidedCard): Object containing card information
         page (Page): Object containing card images
     '''
     print(f'Adding {card}')
 
-    if not card.has_image:
-        raise Exception(f'Image for {card.name} not found')
+    if not card.front.has_image:
+        raise Exception(f'Image for {card.front.name} not found')
 
-    if card.has_back:
-        if not card.has_image_back:
-            raise Exception(f'Image for {card.name_back} not found')
+    if card.back is not None:
+        if not card.back.has_image:
+            raise Exception(f'Image for {card.back.name} not found')
 
     page.add_image_to_page(card)
 
@@ -388,7 +383,7 @@ def save_pages_as_pdf(pages: list[Page]):
     images[0].save(params.PAGE_PATH / 'cards.pdf', save_all=True, append_images=images[1:])
 
 
-def calculate_number_of_pages(cards: list[Card], args: CLIArgs) -> tuple[int, int]:
+def calculate_number_of_pages(cards: list[DoubleSidedCard], args: CLIArgs) -> tuple[int, int]:
     '''
     The number of pages is nontrivial since the bleed on cards, defined at runtime, 
     may cause less cards to be able to fit on pages with backs than on pages without backs.
@@ -401,8 +396,8 @@ def calculate_number_of_pages(cards: list[Card], args: CLIArgs) -> tuple[int, in
         (int): Total number of pages
         (int): Number of pages that have back sides
     '''
-    cards_with_backs = sum(card.has_back * card.instances for card in cards)
-    total_cards = sum(card.instances for card in cards)
+    cards_with_backs = sum((card.back is not None) * card.copies for card in cards)
+    total_cards = sum(card.copies for card in cards)
 
     if args.always_bleed:
         cards_with_bleed = total_cards
@@ -430,7 +425,7 @@ def calculate_number_of_pages(cards: list[Card], args: CLIArgs) -> tuple[int, in
     return total_pages, pages_with_backs
 
 
-def create_pages(args: CLIArgs, cards: list[Card]) -> list[Page]:
+def create_pages(args: CLIArgs, cards: list[DoubleSidedCard]) -> list[Page]:
     '''Create list of blank Pages'''
     total_pages, pages_with_backs = calculate_number_of_pages(cards, args)
     pages = [
@@ -440,7 +435,7 @@ def create_pages(args: CLIArgs, cards: list[Card]) -> list[Page]:
     return pages
 
 
-def populate_pages(args: CLIArgs, cards: list[Card]):
+def populate_pages(args: CLIArgs, cards: list[DoubleSidedCard]):
     '''Creates pages and populates them with card images, then saves them as a jpg.
 
     Args:
@@ -451,7 +446,7 @@ def populate_pages(args: CLIArgs, cards: list[Card]):
     current_page = 1
 
     for card in cards:
-        for _ in range(card.instances):
+        for _ in range(card.copies):
             page = pages[current_page - 1]
 
             if page.is_empty:

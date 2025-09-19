@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 import src.params as params
 
 class CardParser:
-    def __init__(self, card_data: ET.Element):
+    def __init__(self, card_data: ET.Element) -> None:
         self.card_xml = card_data
 
     def extract_card(self) -> Card:
@@ -14,10 +14,11 @@ class CardParser:
             name=self.get_name(),
             id=self.get_id(),
             slots=self.get_slots(),
-            instances=self.get_instances(),
+            copies=self.get_copies(),
             has_bleed=self.has_bleed(),
             image_path=self.get_image_path()
         )
+
         return card
 
     def get_id(self) -> str:
@@ -38,7 +39,7 @@ class CardParser:
             raise Exception(f"Slots data missing from {self.get_name()}")
         return slots.split(",")
 
-    def get_instances(self) -> int:
+    def get_copies(self) -> int:
          return len(self.get_slots())
 
     def has_bleed(self) -> bool:

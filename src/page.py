@@ -1,6 +1,6 @@
 from PIL import Image, ImageDraw
 from PIL.Image import Image as PILImageType
-from src.card import Card
+from src.card import Card, DoubleSidedCard
 from pathlib import Path
 
 import src.params as params
@@ -285,7 +285,7 @@ class Page():
         return current_col, current_row, current_col_back
 
 
-    def add_image_to_page(self, card: Card):
+    def add_image_to_page(self, card: DoubleSidedCard):
         '''Paste a card image onto the page at the correct size.
 
         Args:
@@ -307,11 +307,11 @@ class Page():
         #x and y are the pixel positions on the page which define where the
         #top left corner of the image will be placed.
         x, y = self.paste_position(current_col=self.current_col)
-        self.paste_image(card.image, page=self.page, has_bleed=card.has_bleed, x_pos=x, y_pos=y)
+        self.paste_image(card.front.image, page=self.page, has_bleed=card.front.has_bleed, x_pos=x, y_pos=y)
 
-        if self.back is not None:
+        if self.back is not None and card.back is not None:
             x, y = self.paste_position(current_col=self.current_col_back)
-            self.paste_image(card.image_back, page=self.back, has_bleed=card.has_bleed_back, x_pos=x, y_pos=y)
+            self.paste_image(card.back.image, page=self.back, has_bleed=card.back.has_bleed, x_pos=x, y_pos=y)
 
         self.current_col, self.current_row, self.current_col_back = self.update_position_on_page()
 
