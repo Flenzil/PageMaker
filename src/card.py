@@ -30,9 +30,10 @@ class DoubleSidedCard:
     def __init__(self, front: Card, back: Card|None = None) -> None:
         self.front = front
         self.back = back
+
         self.slots = self.front.slots
         self.copies = self.front.copies
-
+        self.has_generic_back = False
 
     def __repr__(self):
         if self.back is None:

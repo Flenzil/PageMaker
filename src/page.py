@@ -302,6 +302,8 @@ class Page():
             self.is_full = True
 
 
+
+
     def save_page(self, filename: Path):
         if self.page is not None:
             self.page = self.adjust_brightness(self.page)
@@ -312,6 +314,7 @@ class Page():
                 optimize=False,
                 progressive=False
             )
+            self.page.close()
         else:
             raise Exception("Page image is blank!")
 
@@ -325,7 +328,8 @@ class Page():
                     optimize=False,
                     progressive=False
                 )
+                self.back.close()
             else: 
                 raise Exception("Page back image is blank!")
 
-        self.clear_page()
+        

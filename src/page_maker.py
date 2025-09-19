@@ -1,4 +1,5 @@
 import questionary
+import fpdf
 
 from pathlib import Path
 from src.page import Page 
@@ -280,6 +281,7 @@ def assign_images_to_cards(cards: list[Card], card_images: dict[str, PILImageTyp
             continue
 
         image = card_images[card.id]
+
         card.set_image(image)
 
 
@@ -307,6 +309,7 @@ def combine_front_and_backs(fronts: list[Card], backs: list[Card], generic_back:
             card = front // back
         elif generic_back is not None:
             card = front // generic_back
+            card.has_generic_back = True
         else:
             card = front // None
 
@@ -374,13 +377,6 @@ def add_card_to_page(card: DoubleSidedCard, page: Page):
     page.add_image_to_page(card)
 
 
-def save_pages_as_pdf(pages: list[Page]):
-    images = []
-    for page in pages:
-        images.append(page.page)
-        if page.has_back:
-            images.append(page.back)
-    images[0].save(params.PAGE_PATH / 'cards.pdf', save_all=True, append_images=images[1:])
 
 
 def calculate_number_of_pages(cards: list[DoubleSidedCard], args: CLIArgs) -> tuple[int, int]:
@@ -425,14 +421,24 @@ def calculate_number_of_pages(cards: list[DoubleSidedCard], args: CLIArgs) -> tu
     return total_pages, pages_with_backs
 
 
-def create_pages(args: CLIArgs, cards: list[DoubleSidedCard]) -> list[Page]:
+def create_pages(args: CLIArgs, total_pages: int, pages_with_backs: int) -> list[Page]:
     '''Create list of blank Pages'''
-    total_pages, pages_with_backs = calculate_number_of_pages(cards, args)
     pages = [
         Page(args, has_back=(i < pages_with_backs))
         for i in range(total_pages)
     ]
+
     return pages
+
+
+def save_pages_as_pdf(width: int, height: int):
+    pdf = fpdf.FPDF(format=(width, height))
+
+    for page in sorted(params.PAGE_PATH.iterdir()):
+        pdf.add_page()
+        pdf.image(str(page), x=0, y=0, w=width, h=height)
+        
+    pdf.output(str(params.PAGE_PATH / 'cards.pdf'))
 
 
 def populate_pages(args: CLIArgs, cards: list[DoubleSidedCard]):
@@ -442,10 +448,13 @@ def populate_pages(args: CLIArgs, cards: list[DoubleSidedCard]):
         args (ArgumentParser): Object containing command-line arguments.
         cards (list of Card): list of Card objects
     '''
-    pages = create_pages(args, cards)
+    total_pages, pages_with_backs = calculate_number_of_pages(cards, args)
+    pages = create_pages(args, total_pages, pages_with_backs)
+
     current_page = 1
 
     for card in cards:
+        assert card.front.image
         for _ in range(card.copies):
             page = pages[current_page - 1]
 
@@ -455,19 +464,23 @@ def populate_pages(args: CLIArgs, cards: list[DoubleSidedCard]):
             add_card_to_page(card, page)
 
             if page.is_full:
-                if not args.save_as_pdf:
-                    save_pages(page, str(current_page))
-                else:
-                    print()
+                save_pages(page, str(current_page))
 
                 current_page += 1
                 continue
 
+        card.front.image.close()
+        if card.back is not None and card.back.image is not None and not card.has_generic_back:
+            card.back.image.close()
+
+
+    if current_page <= len(pages):
+        save_pages(pages[-1], str(current_page))
+
     if args.save_as_pdf:
-        save_pages_as_pdf(pages)
-    else:
-        if current_page <= len(pages):
-            save_pages(pages[-1], str(current_page))
+        page_width_in_mm = int(helpers.convert_pixels_to_mm(args.card_width, args.page_width))
+        page_height_in_mm = int(helpers.convert_pixels_to_mm(args.card_width, args.page_height))
+        save_pages_as_pdf(width=page_width_in_mm, height=page_height_in_mm)
 
 
 def main(argv=None):
