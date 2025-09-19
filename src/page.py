@@ -1,6 +1,6 @@
 from PIL import Image, ImageDraw
 from PIL.Image import Image as PILImageType
-from src.card import Card, DoubleSidedCard
+from src.card import DoubleSidedCard
 from pathlib import Path
 
 import src.params as params
@@ -24,30 +24,13 @@ class Page():
         self.has_back = has_back
         self.args = args
 
-        if (self.has_back and not self.no_bleed) or self.always_bleed:
+        if (self.has_back and not self.args.no_bleed) or self.args.always_bleed:
             self.keep_bleed = True
         else:
             self.keep_bleed = False
 
         #Reset page
         self.clear_page()
-
-        #---------- Always run last in constructor -------------
-        self._check_for_parameter_clashes()
-
-
-    def _check_for_parameter_clashes(self):
-        for parameter in self.__dict__.keys():
-            try:
-                self.args.__getattr__(parameter)
-                raise Exception(f"parameter {parameter} in Page, clashes with parameter from CLIArgs!")
-            except KeyError:
-                pass
-
-
-    def __getattr__(self, name):
-        '''Inerit all attributes from the cli arguments object'''
-        return getattr(self.args, name)
 
 
     def calculate_rows_and_cols(self) -> tuple[int, int]:
@@ -56,12 +39,12 @@ class Page():
         '''
         #Number of rows and columns, set by the page size e.g a4 pages can hold 
         #3x3 mtg cards.
-        if (not self.no_bleed and self.has_back) or self.always_bleed:
-            columns = self.page_width // (self.card_width + 2 * self.card_bleed_x + self.spacing_x)
-            rows = self.page_height // (self.card_height + 2 * self.card_bleed_y + self.spacing_y)
+        if (not self.args.no_bleed and self.has_back) or self.args.always_bleed:
+            columns = self.args.page_width // (self.args.card_width + 2 * self.args.card_bleed_x + self.args.spacing_x)
+            rows = self.args.page_height // (self.args.card_height + 2 * self.args.card_bleed_y + self.args.spacing_y)
         else:
-            columns = self.page_width // (self.card_width + self.spacing_x)
-            rows = self.page_height // (self.card_height + self.spacing_y)
+            columns = self.args.page_width // (self.args.card_width + self.args.spacing_x)
+            rows = self.args.page_height // (self.args.card_height + self.args.spacing_y)
 
         return columns, rows
 
@@ -73,9 +56,9 @@ class Page():
         margin_x = int(
             0.5
             * (
-                self.page_width
-                - self.columns * self.card_width
-                - (self.columns - 1) * self.spacing_x
+                self.args.page_width
+                - self.columns * self.args.card_width
+                - (self.columns - 1) * self.args.spacing_x
             )
         )
         margin_x = max(params.margin_x_min, margin_x)
@@ -83,9 +66,9 @@ class Page():
         margin_y = int(
             0.5
             * (
-                self.page_height
-                - self.rows * self.card_height
-                - (self.rows - 1) * self.spacing_y
+                self.args.page_height
+                - self.rows * self.args.card_height
+                - (self.rows - 1) * self.args.spacing_y
             )
         )
         margin_y = max(params.margin_y_min, margin_y)
@@ -118,17 +101,17 @@ class Page():
             y (int): y pixel position of top left corner of card
         '''
 
-        x_b = x + self.card_bleed_x
-        y_b = y + self.card_bleed_y
+        x_b = x + self.args.card_bleed_x
+        y_b = y + self.args.card_bleed_y
         crop_marks = [
             (x_b, y_b),
-            (x_b + self.card_width, y_b),
-            (x_b, y_b + self.card_height),
-            (x_b + self.card_width, y_b + self.card_height),
+            (x_b + self.args.card_width, y_b),
+            (x_b, y_b + self.args.card_height),
+            (x_b + self.args.card_width, y_b + self.args.card_height),
         ]
 
-        crop_mark_size = max(2, self.crop_mark_size)
-        outline_width = max(2, self.crop_mark_size // 4)
+        crop_mark_size = max(2, self.args.crop_mark_size)
+        outline_width = max(2, self.args.crop_mark_size // 4)
 
         draw = ImageDraw.Draw(page)
         ch = crop_mark_size // 2
@@ -145,10 +128,10 @@ class Page():
 
     def adjust_brightness(self, image: PILImageType) -> PILImageType:
         '''Adjust brightness of card image'''
-        if self.brightness_adjust == 1:
+        if self.args.brightness_adjust == 1:
             return image
 
-        lut = [min(255, int(i * self.brightness_adjust)) for i in range(256)] * 3
+        lut = [min(255, int(i * self.args.brightness_adjust)) for i in range(256)] * 3
         image = image.point(lut)
 
         return image
@@ -167,19 +150,19 @@ class Page():
         if self.keep_bleed:
             x = (
                 self.margin_x
-                - self.columns * self.card_bleed_x
+                - self.columns * self.args.card_bleed_x
                 + current_col
-                * (self.card_width + 2 * self.card_bleed_x + self.spacing_x)
+                * (self.args.card_width + 2 * self.args.card_bleed_x + self.args.spacing_x)
             )
             y = (
                 self.margin_y
-                - self.rows * self.card_bleed_y
+                - self.rows * self.args.card_bleed_y
                 + self.current_row
-                * (self.card_height + 2 * self.card_bleed_y + self.spacing_y)
+                * (self.args.card_height + 2 * self.args.card_bleed_y + self.args.spacing_y)
             )
         else:
-            x = self.margin_x + current_col * (self.card_width + self.spacing_x)
-            y = self.margin_y + self.current_row * (self.card_height + self.spacing_y)
+            x = self.margin_x + current_col * (self.args.card_width + self.args.spacing_x)
+            y = self.margin_y + self.current_row * (self.args.card_height + self.args.spacing_y)
 
         return x, y
 
@@ -199,32 +182,32 @@ class Page():
         '''
         if has_bleed:
             target_size = (
-                    self.card_width + 2 * self.mpcfill_bleed,
-                    self.card_height + 2 * self.mpcfill_bleed,
+                    self.args.card_width + 2 * self.args.mpcfill_bleed,
+                    self.args.card_height + 2 * self.args.mpcfill_bleed,
                 )
         else:
-            target_size = (self.card_width, self.card_height)
+            target_size = (self.args.card_width, self.args.card_height)
 
         if self.keep_bleed and has_bleed:
-            left = self.card_crop_x
-            right = self.card_width + 2 * self.mpcfill_bleed - self.card_crop_x
-            upper = self.card_crop_y
-            lower = self.card_height + 2 * self.mpcfill_bleed - self.card_crop_y
+            left = self.args.card_crop_x
+            right = self.args.card_width + 2 * self.args.mpcfill_bleed - self.args.card_crop_x
+            upper = self.args.card_crop_y
+            lower = self.args.card_height + 2 * self.args.mpcfill_bleed - self.args.card_crop_y
         elif self.keep_bleed and not has_bleed:
-            left = -self.card_bleed_x
-            right = self.card_width + self.card_bleed_x
-            upper = -self.card_bleed_y
-            lower = self.card_height + self.card_bleed_y
+            left = -self.args.card_bleed_x
+            right = self.args.card_width + self.args.card_bleed_x
+            upper = -self.args.card_bleed_y
+            lower = self.args.card_height + self.args.card_bleed_y
         elif not self.keep_bleed and has_bleed:
-            left = self.mpcfill_bleed
-            right = self.card_width + self.mpcfill_bleed
-            upper = self.mpcfill_bleed
-            lower = self.card_height + self.mpcfill_bleed
+            left = self.args.mpcfill_bleed
+            right = self.args.card_width + self.args.mpcfill_bleed
+            upper = self.args.mpcfill_bleed
+            lower = self.args.card_height + self.args.mpcfill_bleed
         else:
             left = 0
-            right = self.card_width
+            right = self.args.card_width
             upper = 0
-            lower = self.card_height
+            lower = self.args.card_height
 
         # Scale cropping to resized coords
         w_orig, h_orig = image.size
@@ -294,13 +277,13 @@ class Page():
         if self.page is None:
             self.page = Image.new(
                 mode='RGB',
-                size=(self.page_width, self.page_height),
+                size=(self.args.page_width, self.args.page_height),
                 color=(255,255,255)
             )
         if self.has_back and self.back is None:
             self.back = Image.new(
                 mode='RGB',
-                size=(self.page_width, self.page_height),
+                size=(self.args.page_width, self.args.page_height),
                 color=(255,255,255) 
             )
 
