@@ -1,6 +1,14 @@
 import src.params as params
 from pathlib import Path
 
+
+def clear_folder(path: Path) -> None:
+    '''Remove old pages from pages folder.'''
+    path.mkdir(exist_ok=True)
+    for page in path.glob('*'):
+        Path.unlink(page)
+
+
 def get_page_widths(page_size: str) -> int:
     """Calculates the width of a given A, B, or C series paper size.
 
@@ -19,6 +27,7 @@ def get_page_widths(page_size: str) -> int:
     step_from_base = 4 - int(page_size[1]) #A4 = 0, B3 = 1, C5 = -1 etc.
     return int(page_widths[series] * pow(pow(2, 0.5), step_from_base))
 
+
 def convert_mm_to_pixels(card_width: float, mm: float) -> int:
     """Converts from millimetres to pixels on the page. The card width is a known
     quantity: mtg cards are 63mm wide. So we use it for conversion.
@@ -33,6 +42,7 @@ def convert_pixels_to_mm(card_width: float, pixels: int) -> float:
     """
     mm_per_pixel = params.card_width_in_mm / card_width
     return pixels * mm_per_pixel
+
 
 def get_all_images_from_folder(path: Path) -> list[str]:
     images = []

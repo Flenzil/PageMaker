@@ -26,17 +26,17 @@ pip install -r requirements.txt
 ## Usage
 1. Download `cards.xml` from your MPCFIll project and put it into `data/xml`.
 2. Put any extra card images you'd like added to the pages into the `data/custom_images` folder.
-3. Navigate to the `PageMaker/` folder
+3. Navigate to the `PageMaker/` folder in the command line
 4. Run the script:
 
 Linux:
 ```
-python3 -m src.page_maker
+python3 -m src.main
 ```
 
 Windows:
 ```
-python -m src.page_maker
+python -m src.main
 ```
 
 
