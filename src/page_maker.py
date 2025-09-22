@@ -1,11 +1,13 @@
 import questionary
 import fpdf
+import asyncio
 
 from pathlib import Path
 from src.page import Page 
 from src.card import Card, DoubleSidedCard
 from src.card_parser import CardParser
 from src.cli_args_manager import CLIArgsManager, CLIArgs
+from typing import Callable
 from PIL.Image import Image as PILImageType
 
 import src.get_images as get_images
@@ -37,8 +39,6 @@ def clear_pages_folder() -> None:
     params.PAGE_PATH.mkdir(exist_ok=True)
     for page in params.PAGE_PATH.glob('*'):
         Path.unlink(page)
-
-
 
 
 def create_xml(id: str, slots: str, name: str, query: str) -> ET.Element:
@@ -346,7 +346,7 @@ def create_cards(args: CLIArgs) -> list[DoubleSidedCard]:
     return sorted(cards, key=lambda x: x.back is not None, reverse=True)
 
 
-def add_card_to_page(card: DoubleSidedCard, page: Page) -> None:
+async def add_card_to_page(card: DoubleSidedCard, page: Page) -> None:
     '''Adds card image to page, also add back side of card to a seperate
     page, if applicable.
 
@@ -363,9 +363,93 @@ def add_card_to_page(card: DoubleSidedCard, page: Page) -> None:
         if not card.back.has_image:
             raise Exception(f'Image for {card.back.name} not found')
 
-    page.add_image_to_page(card)
+    await asyncio.to_thread(page.add_image_to_page, card)
 
 
+def release_card_images(card: DoubleSidedCard):
+    '''Close pillow images after they have been added to pages to release memory'''
+    if card.front is not None and card.front.image is not None:
+        card.front.image.close()
+    if card.back is not None and card.back.image is not None and not card.has_generic_back:
+        card.back.image.close()
+
+
+async def fill_pages(cards: list[DoubleSidedCard], pages: list[Page], save_queue: asyncio.Queue) -> None:
+    '''Add card images to pages and enqueues pages to be saved by background workers concurrently.'''
+    current_page = 1
+    for card in cards:
+        for _ in range(card.copies):
+            page = pages[current_page - 1]
+
+            await add_card_to_page(card, page)
+
+            if page.is_full:
+                save_queue.put_nowait((page, str(current_page)))
+                current_page += 1
+                continue
+
+        release_card_images(card)
+
+    if current_page <= len(pages):
+        save_queue.put_nowait((pages[-1], str(current_page)))
+
+
+def save_pages_as_pdf(width: int, height: int) -> None:
+    '''
+    Save pages from images found in PAGE_PATH into a single pdf named cards.pdf
+
+    Args:
+        width: width each in pdf in mm
+        height: height each in pdf in mm
+    '''
+    pdf = fpdf.FPDF(format=(width, height))
+
+    for page in sorted(params.PAGE_PATH.iterdir()):
+        pdf.add_page()
+        pdf.image(str(page), x=0, y=0, w=width, h=height)
+        
+    pdf.output(str(params.PAGE_PATH / 'cards.pdf'))
+
+
+async def save_pages(page: Page, name: str) -> None:
+    '''Asynchronously save pages with naming: (name).jpg or (name)_back.jpg'''
+    await asyncio.to_thread(page.save_page, params.PAGE_PATH / f'{name}.jpg')
+
+
+async def page_saver(queue: asyncio.Queue) -> None:
+    '''
+    Saves pages to disk. Worker consumes pages from queue
+    '''
+    while True:
+        page, name = await queue.get()
+        if page is None:
+            break
+        await save_pages(page, name)
+        queue.task_done()
+
+
+def create_workers(queue: asyncio.Queue, worker_coroutine: Callable, number_of_workers: int) -> list[asyncio.Task]:
+    '''Create list of workers using worker_coroutine to consume from queue.'''
+    workers = [asyncio.create_task(worker_coroutine(queue)) for _ in range(number_of_workers)]
+    return workers
+
+
+async def shut_down_workers(workers: list[asyncio.Task]) -> None:
+    '''Stops all workers'''
+    for worker in workers:
+        worker.cancel()
+
+    await asyncio.gather(*workers, return_exceptions=True)
+
+
+def initialise_pages(args: CLIArgs, total_pages: int, pages_with_backs: int) -> list[Page]:
+    '''Create list of blank Pages'''
+    pages = [
+        Page(args, has_back=(i < pages_with_backs))
+        for i in range(total_pages)
+    ]
+
+    return pages
 
 
 def calculate_number_of_pages(cards: list[DoubleSidedCard], args: CLIArgs) -> tuple[int, int]:
@@ -400,7 +484,6 @@ def calculate_number_of_pages(cards: list[DoubleSidedCard], args: CLIArgs) -> tu
     page_capacity_bleed = cols_with_bleed * rows_with_bleed
     page_capacity = cols * rows
 
-
     pages_with_bleed = helpers.ceiling_divide(cards_with_bleed, page_capacity_bleed)
     pages_without_bleed = helpers.ceiling_divide(total_cards - pages_with_bleed * page_capacity_bleed, page_capacity)
 
@@ -410,84 +493,35 @@ def calculate_number_of_pages(cards: list[DoubleSidedCard], args: CLIArgs) -> tu
     return total_pages, pages_with_backs
 
 
-def create_pages(args: CLIArgs, total_pages: int, pages_with_backs: int) -> list[Page]:
-    '''Create list of blank Pages'''
-    pages = [
-        Page(args, has_back=(i < pages_with_backs))
-        for i in range(total_pages)
-    ]
-
-    return pages
-
-
-def save_pages(page: Page, name: str) -> None:
-    '''Save pages with naming: (name).jpg or (name)_back.jpg
-
-    Args:
-        page (Page): Page object containing card fronts.
-        back (Page): Page object containing card backs
-        name (int): Page number, used for the name of the .jpg
-    '''
-    print()
-    print(f'Saving page {name}... ', end='', flush=True)
-    page.save_page(params.PAGE_PATH / f'{name}.jpg')
-    print('Saved!')
-    print()
-
-
-def save_pages_as_pdf(width: int, height: int) -> None:
-    '''
-    Save pages from images found in PAGE_PATH into a single pdf named cards.pdf
-
-    Args:
-        width: width each in pdf in mm
-        height: height each in pdf in mm
-    '''
-    pdf = fpdf.FPDF(format=(width, height))
-
-    for page in sorted(params.PAGE_PATH.iterdir()):
-        pdf.add_page()
-        pdf.image(str(page), x=0, y=0, w=width, h=height)
-        
-    pdf.output(str(params.PAGE_PATH / 'cards.pdf'))
-
-
-def populate_pages(args: CLIArgs, cards: list[DoubleSidedCard]) -> None:
-    '''Creates pages and populates them with card images, then saves them as a jpg.
+async def create_pages(args: CLIArgs, cards: list[DoubleSidedCard]) -> None:
+    '''Creates pages and asynchronously populates them with card images, then saves them as a jpg
+    using a producer-consumer system. 
+    Optionally also then saves those images as a single .pdf.
 
     Args:
         args (ArgumentParser): Object containing command-line arguments.
         cards (list of Card): list of Card objects
     '''
+    # Precalculate number of pages
     total_pages, pages_with_backs = calculate_number_of_pages(cards, args)
-    pages = create_pages(args, total_pages, pages_with_backs)
 
-    current_page = 1
+    # Create blank pages
+    pages = initialise_pages(args, total_pages, pages_with_backs)
 
-    for card in cards:
-        assert card.front.image
-        for _ in range(card.copies):
-            page = pages[current_page - 1]
+    # Create queue and workers for saving pages
+    save_queue = asyncio.Queue()
+    savers = create_workers(save_queue, page_saver, params.number_of_saving_workers)
 
-            if page.is_empty:
-                print(f'Creating page {current_page}...')
+    # Populate pages with card images
+    await fill_pages(cards, pages, save_queue)
 
-            add_card_to_page(card, page)
+    # Save pages
+    await save_queue.join()
 
-            if page.is_full:
-                save_pages(page, str(current_page))
+    # Kill workers
+    await shut_down_workers(savers)
 
-                current_page += 1
-                continue
-
-        card.front.image.close()
-        if card.back is not None and card.back.image is not None and not card.has_generic_back:
-            card.back.image.close()
-
-
-    if current_page <= len(pages):
-        save_pages(pages[-1], str(current_page))
-
+    # Optionally save images as .pdf
     if args.save_as_pdf:
         page_width_in_mm = int(helpers.convert_pixels_to_mm(args.card_width, args.page_width))
         page_height_in_mm = int(helpers.convert_pixels_to_mm(args.card_width, args.page_height))
@@ -498,7 +532,7 @@ def main(argv=None):
     args = CLIArgsManager(argv).get_cli_args()
     clear_pages_folder()
     cards = create_cards(args)
-    populate_pages(args, cards)
+    asyncio.run(create_pages(args, cards))
 
 
 if __name__ == '__main__':
