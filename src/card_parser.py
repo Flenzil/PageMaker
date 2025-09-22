@@ -6,6 +6,10 @@ import xml.etree.ElementTree as ET
 import src.params as params
 
 class CardParser:
+    '''
+    Class for extracting values from MPCFill's XML file, containing project information.
+    Can instantiate a Card object to contain these values.
+    '''
     def __init__(self, card_data: ET.Element) -> None:
         self.card_xml = card_data
 

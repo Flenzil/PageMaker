@@ -24,7 +24,8 @@ are cached locally in `params.IMAGE_PATH`, and any cached image will be
 reused to avoid redundant downloads.
 '''
 
-def open_and_load_image(path):
+def open_and_load_image(path:Path) -> PILImageType:
+    '''Open image and ensure that Pillow loads the image into memory'''
     image = Image.open(path)
     image.load()
     return image
@@ -80,6 +81,15 @@ async def update_progess_bar(
 ) -> bytearray:
     '''
     Extract image from response peicewise and update progress bar.
+
+    Args:
+        response (aiohttp.ClientResponse): Image response from Google Drive
+        progress (Progress): Progress bar for download
+        task_id (TaskID): Aliased int, ID for this download
+        total (int): Expected total size for complete image
+
+    Returns:
+        (bytearray): Image pixel data
     '''
     progress.update(task_id, total=total, visible=True)
     data = bytearray()
@@ -95,7 +105,16 @@ async def update_progess_bar(
 
 
 def handle_confirmation_page_response(response_html: str, url: str) -> str:
-    '''Find confirmation token within confirmation page'''
+    '''
+    Find confirmation token within confirmation page
+
+    Args:
+        response_html (str): Text content of html response from Google Drive
+        url (str): url for Google Drive image download
+
+    Returns:
+        (str): modified url, now with confirmation token 
+    '''
 
     match = re.search(r'confirm=([0-9A-Za-z_]+)', response_html)
     if match:
@@ -107,7 +126,17 @@ def handle_confirmation_page_response(response_html: str, url: str) -> str:
 
 
 async def handle_quota_exceeded_response(session:aiohttp.ClientSession, card: Card, headers: dict) -> bytearray:
-    '''Switch to Google Script end point as a fall back'''
+    '''
+    Use Google Script end point to fetch image as a fall back
+
+    Args:
+        session (ClientSession): Persistent aiohttp session used to perform HTTP requests.
+        card (Card): Object containing card data
+        headers (dict): Browser header data for request
+
+    Returns:
+        (bytearray): Image pixel data
+    '''
 
     print(f'Download failed for {card}. Falling back to (slower) alternative method.')
 
@@ -124,9 +153,7 @@ async def handle_quota_exceeded_response(session:aiohttp.ClientSession, card: Ca
             raise Exception('Scripts endpoint returned non-image data')
 
 
-async def handle_image_response(
-    response: aiohttp.ClientResponse, progress: Progress, task_id: TaskID
-) -> bytearray|None:
+async def handle_image_response(response: aiohttp.ClientResponse, progress: Progress, task_id: TaskID) -> bytearray|None:
 
     '''
     Extract image data from response.
@@ -134,7 +161,10 @@ async def handle_image_response(
     Args:
         response (ClientResponse): The HTTP response object from aiohttp.
         progress (Progress): Progress bar object used to display download progress
-        task_id (TaskID): id for progress bar
+        task_id (TaskID): Aliased int, id for download
+
+    Returns:
+        (bytearray|None): Raw image data or None if the image only partially downloaded
     '''
 
     total = int(response.headers.get('Content-Length', 0))
@@ -151,6 +181,14 @@ async def handle_response(response: aiohttp.ClientResponse, progress: Progress, 
     Attempts to extract image data from response. Raises various errors that are
     handled in caller to trigger workarounds for various blockers e.g confirmation
     needed page or exceeded quotas.
+
+    Args:
+        response (ClientResponse): The HTTP response object from aiohttp.
+        progress (Progress): Progress bar object used to display download progress
+        task_id (TaskID): Aliased int, id for download
+
+    Returns:
+        (bytearray): Raw image data
     '''
     if response.status != 200:
         raise Exception(f'HTTP error: {response.status} for {response.url}')
@@ -178,7 +216,7 @@ async def handle_response(response: aiohttp.ClientResponse, progress: Progress, 
         raise Exception(f'Unable to parse response for {response.url}')
 
 
-async def download_image(session: aiohttp.ClientSession, card: Card, progress: Progress, task_id: TaskID) -> bytearray|None:
+async def download_image(session: aiohttp.ClientSession, card: Card, progress: Progress, task_id: TaskID) -> bytearray:
     '''
     Get response from google drive to extract image, even if recieving a html page.
 
@@ -186,7 +224,7 @@ async def download_image(session: aiohttp.ClientSession, card: Card, progress: P
         session (ClientSession): Persistent aiohttp session used to perform HTTP requests.
         card (Card): Object containing card information.
         progress (Progress): Progress bar object used to display download progress
-        task_id (int): id for progress bar
+        task_id (int|None): id for progress bar
 
     Returns:
         (bytearray): Image data of card
@@ -240,7 +278,7 @@ async def download_image(session: aiohttp.ClientSession, card: Card, progress: P
         raise Exception(f'Unable to retrieve image for {card}')
 
 
-async def save_image(image: bytearray, card: Card):
+async def save_image(image: bytearray, card: Card) -> None:
     '''Asynchronously save image to IMAGE_PATH'''
     filename = card.image_path
 
@@ -251,9 +289,17 @@ async def save_image(image: bytearray, card: Card):
 async def get_image_from_download_or_disk(
     session: aiohttp.ClientSession, semaphore:asyncio.Semaphore, card: Card, progress: Progress, task_id: TaskID
 ) -> dict[str, PILImageType]:
+    '''
+    Either retrieve image from disk or download image if not present
 
-    '''Either retrieve image from disk or download image if not present'''
-
+    Args:
+        session (ClientSession): Persistent aiohttp session used to perform HTTP requests.
+        semaphore (asyncio.Semaphore): Semaphore object limiting concurrency
+        card (Card): Object containing card information.
+        progress (Progress): Progress bar object used to display download progress
+        task_id (int|None): id for progress bar
+        
+    '''
     await semaphore.acquire()
 
     try:
@@ -315,6 +361,16 @@ async def find_images(cards: list[Card]) -> list[dict[str, PILImageType]]:
 
 
 def get_card_images(cards: list[Card]) -> dict[str, PILImageType]:
+    '''
+    Entry point for script
+
+    Args:
+        cards (list[Card]): list of objects containing card data
+
+    Returns:
+        (dict[str, PILImageType]): Mapping of card ID to card image
+
+    '''
     card_images = asyncio.run(find_images(cards))
     card_images_flattened = {name: img for d in card_images for name, img in d.items()}
 

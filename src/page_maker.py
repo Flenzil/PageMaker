@@ -32,31 +32,20 @@ Typical use case:
     - Print using standard or duplex printing, depending on back design
 '''
 
-def clear_pages_folder():
-    '''
-    Remove old pages from pages folder.
-    '''
+def clear_pages_folder() -> None:
+    '''Remove old pages from pages folder.'''
     params.PAGE_PATH.mkdir(exist_ok=True)
     for page in params.PAGE_PATH.glob('*'):
         Path.unlink(page)
 
 
-def save_pages(page: Page, name: str):
-    '''Save pages with naming: (name).jpg or (name)_back.jpg
 
-    Args:
-        page (Page): Page object containing card fronts.
-        back (Page): Page object containing card backs
-        name (int): Page number, used for the name of the .jpg
+
+def create_xml(id: str, slots: str, name: str, query: str) -> ET.Element:
     '''
-    print()
-    print(f'Saving page {name}... ', end='', flush=True)
-    page.save_page(params.PAGE_PATH / f'{name}.jpg')
-    print('Saved!')
-    print()
-
-
-def create_xml(id, slots, name, query):
+    Create an in-memory XML element, matching the XML elements from MPCFill
+    cards.
+    '''
     card = ET.Element("card")
     ET.SubElement(card, "id").text = id
     ET.SubElement(card, "slots").text = slots
@@ -192,7 +181,7 @@ def add_extra_images(cards: list[Card]) -> tuple[list[Card], list[Card]]:
     return extra_cards, extra_backs
 
 
-def create_card_dict(name: str|None, id: str|None, slots: str|None) -> dict: 
+def create_card_dict(name: str|None, id: str|None, slots: str|None) -> dict[str, str]: 
     if name is None or id is None or slots is None:
         raise Exception("Malformed Card")
     card = {
@@ -295,7 +284,7 @@ def combine_front_and_backs(fronts: list[Card], backs: list[Card], generic_back:
         backs (list[Card]): list of Card objects representing back sides
         generic_back (Card|None): Card object representing the generic back side of the cards
     Returns:
-        (list[Card]): list of Card objects with backs attached if applicable
+        (list[DoubleSidedCard]): list of DoubleSidedCard objects representin front and back cards
     '''
     cards = []
     for front in fronts:
@@ -357,7 +346,7 @@ def create_cards(args: CLIArgs) -> list[DoubleSidedCard]:
     return sorted(cards, key=lambda x: x.back is not None, reverse=True)
 
 
-def add_card_to_page(card: DoubleSidedCard, page: Page):
+def add_card_to_page(card: DoubleSidedCard, page: Page) -> None:
     '''Adds card image to page, also add back side of card to a seperate
     page, if applicable.
 
@@ -431,7 +420,29 @@ def create_pages(args: CLIArgs, total_pages: int, pages_with_backs: int) -> list
     return pages
 
 
-def save_pages_as_pdf(width: int, height: int):
+def save_pages(page: Page, name: str) -> None:
+    '''Save pages with naming: (name).jpg or (name)_back.jpg
+
+    Args:
+        page (Page): Page object containing card fronts.
+        back (Page): Page object containing card backs
+        name (int): Page number, used for the name of the .jpg
+    '''
+    print()
+    print(f'Saving page {name}... ', end='', flush=True)
+    page.save_page(params.PAGE_PATH / f'{name}.jpg')
+    print('Saved!')
+    print()
+
+
+def save_pages_as_pdf(width: int, height: int) -> None:
+    '''
+    Save pages from images found in PAGE_PATH into a single pdf named cards.pdf
+
+    Args:
+        width: width each in pdf in mm
+        height: height each in pdf in mm
+    '''
     pdf = fpdf.FPDF(format=(width, height))
 
     for page in sorted(params.PAGE_PATH.iterdir()):
@@ -441,7 +452,7 @@ def save_pages_as_pdf(width: int, height: int):
     pdf.output(str(params.PAGE_PATH / 'cards.pdf'))
 
 
-def populate_pages(args: CLIArgs, cards: list[DoubleSidedCard]):
+def populate_pages(args: CLIArgs, cards: list[DoubleSidedCard]) -> None:
     '''Creates pages and populates them with card images, then saves them as a jpg.
 
     Args:
@@ -491,4 +502,7 @@ def main(argv=None):
 
 
 if __name__ == '__main__':
+    import time
+    start = time.time()
     main()
+    print(time.time() - start)

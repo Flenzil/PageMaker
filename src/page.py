@@ -12,8 +12,13 @@ class Page():
     This represents a single page containing cards and is used to
     manipulate the images (cropping, resizing etc.) and ensuring 
     that the cards print out to the right size. 
+
+    Attributes:
+        args (CLIArgs): Object containing all command-line arguments
+        has_back (bool): True is this page has a back side
+        keep_bleed (bool): True if the bleed on cards is not to be cropped off
     '''
-    def __init__(self, args: CLIArgs, has_back: bool=False):
+    def __init__(self, args: CLIArgs, has_back: bool=False) -> None:
         '''Initialise the page.
             
         Args:
@@ -76,7 +81,7 @@ class Page():
         return margin_x, margin_y
 
 
-    def clear_page(self):
+    def clear_page(self) -> None:
         '''Create empty page and reset associated variables'''
         self.page = None
         self.back = None
@@ -90,7 +95,7 @@ class Page():
 
 
 
-    def add_crop_marks(self, page: PILImageType, x: int, y: int):
+    def add_crop_marks(self, page: PILImageType, x: int, y: int) -> None:
         '''Add visual crop marks to guide cutting when bleed is present.
         
         Draws small squares at each corner of the card using a black border
@@ -125,12 +130,12 @@ class Page():
                 width=outline_width
             )
 
-
     def adjust_brightness(self, image: PILImageType) -> PILImageType:
         '''Adjust brightness of card image'''
         if self.args.brightness_adjust == 1:
             return image
 
+        #Define look-up table
         lut = [min(255, int(i * self.args.brightness_adjust)) for i in range(256)] * 3
         image = image.point(lut)
 
@@ -231,15 +236,15 @@ class Page():
         return image
 
 
-    def paste_image(self, image: PILImageType|None, page: PILImageType, has_bleed: bool, x_pos: int, y_pos: int):
+    def paste_image(self, image: PILImageType|None, page: PILImageType, has_bleed: bool, x_pos: int, y_pos: int) -> None:
         '''Paste card image to page
 
         Args:
             image (PILImageType): Card image
             page (PILImageType): Page image
             has_bleed (bool): True is card has bleed in its image
-            x_pos (int): x pixel position to which to paste card image on page
-            y_pos (int): y pixel position to which to paste card image on page
+            x_pos (int): top-right x pixel position to which to paste card image on page
+            y_pos (int): top-right y pixel position to which to paste card image on page
         '''
         if image is None:
             return
@@ -268,11 +273,11 @@ class Page():
         return current_col, current_row, current_col_back
 
 
-    def add_image_to_page(self, card: DoubleSidedCard):
+    def add_image_to_page(self, card: DoubleSidedCard) -> None:
         '''Paste a card image onto the page at the correct size.
 
         Args:
-            card (Card): Card object.
+            card (DoubleSidedCard): Object containing data for card front and back side
         '''
         if self.page is None:
             self.page = Image.new(
@@ -304,7 +309,8 @@ class Page():
 
 
 
-    def save_page(self, filename: Path):
+    def save_page(self, filename: Path) -> None:
+        ''' Save page to disk and then clear the image data to save memory'''
         if self.page is not None:
             self.page = self.adjust_brightness(self.page)
 
