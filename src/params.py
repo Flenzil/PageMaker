@@ -60,6 +60,8 @@ page_ratio = 1.4142135623730  # sqrt(2)
 
 # Download paramaters
 MAX_DOWNLOAD_RETRIES = 3
+MAX_BACKOFF = 30
+backoff_mult = 1.5
 download_chunk_size = 1024 * 256
 max_simultaneous_downloads = 10
 
