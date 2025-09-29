@@ -1,0 +1,9 @@
+{% macro slider(name, min, max, step, default, hover, unit="") %}
+  <div id="{{ name }}-container" class="tooltip-container">
+    <label class="slider-label" for="{{ name }}">{{ name|replace('_', ' ')|replace('-', ' ') }}</label>
+    <input type="range" id="{{ name }}-slider" name="{{name}}" value={{default}} min={{min}} max={{max}} step={{step}} data-display="{{name}}-display">
+    <span class="tooltip-text">{{hover}}</span>
+    <span class="slider-display" id="{{ name }}-display">{{default}}</span>
+    <span class="slider-display">{{unit}}</span>
+  </div>
+{% endmacro %}

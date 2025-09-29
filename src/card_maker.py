@@ -6,7 +6,6 @@ from src.cli_args_manager import CLIArgs
 from PIL.Image import Image as PILImageType
 import src.get_images as get_images
 import xml.etree.ElementTree as ET
-from pathlib import Path
 
 import src.params as params
 import src.helpers as helpers
@@ -161,7 +160,7 @@ def add_extra_images(cards: list[Card]) -> tuple[list[Card], list[Card]]:
     return extra_cards, extra_backs
 
 
-def get_cards_info_from_xml(xml: Path) -> tuple[list[Card], list[Card], Card]:
+def get_cards_info_from_xml(xml_file) -> tuple[list[Card], list[Card], Card]:
     '''
     Extracts card information from xml file
 
@@ -175,11 +174,10 @@ def get_cards_info_from_xml(xml: Path) -> tuple[list[Card], list[Card], Card]:
         generic_card_back (ET.Element): XML object containing information for generic back side of cards
     '''
     try:
-        with open(xml) as f:
-            root = ET.parse(f).getroot()
-            cards_xml = root.find('fronts')
-            backs_xml = root.find('backs')
-            generic_card_back_id_xml = root.findtext('cardback')
+        root = ET.parse(xml_file).getroot()
+        cards_xml = root.find('fronts')
+        backs_xml = root.find('backs')
+        generic_card_back_id_xml = root.findtext('cardback')
     except ET.ParseError:
         raise Exception('XML file is empty!')
 
@@ -278,7 +276,7 @@ def combine_front_and_backs(fronts: list[Card], backs: list[Card], generic_back:
     return cards
 
 
-def create_cards(args: CLIArgs) -> list[DoubleSidedCard]:
+def create_cards(args: CLIArgs, xml = None) -> list[DoubleSidedCard]:
     '''
     Entry point for create_cards.
 
@@ -292,8 +290,12 @@ def create_cards(args: CLIArgs) -> list[DoubleSidedCard]:
         list[Card]: List of Card objects, each representing a unique card.
     '''
 
+    if xml is None:
+        xml_file = open(params.XML_PATH / 'cards.xml') 
+    else: 
+        xml_file = xml
     # Transform card data from xml elements to Card objects
-    fronts, backs, generic_back = get_cards_info_from_xml(params.XML_PATH / 'cards.xml')
+    fronts, backs, generic_back = get_cards_info_from_xml(xml_file)
 
     # Remove images from a previous run except those that are shared with this run
     remove_old_images(exceptions=fronts+backs+[generic_back])

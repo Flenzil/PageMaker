@@ -1,0 +1,26 @@
+{% from  "macros/sliders.html" import slider with context %}
+
+{% macro slider_splitter(name, hover, class="slider-splitter")%}
+  <div class="{{ class }}">
+    <div id="separate-{{ name }}-container" class="tooltip-container">
+      <label for="separate-{{ name }}" class="checkbox-label"> SEPARATE X AND Y {{ name }} </label>
+      <input type="checkbox" class="checkbox" id="separate-{{ name }}" name="separate-{{ name }}" value="True" data-splits="{{ name }}-sliders">
+      <span class="tooltip-text">{{hover}}</span>
+    </div>
+  </div>
+{% endmacro %}
+
+{% macro splittable_slider(name, min, max, step, default, hover, unit="", class="splittable_slider")%}
+  <div class = "sliders-combined-container">
+    <div id = "{{name}}-combined-container"
+      {{ slider(name=name, min=min, max=max, step=step, default=default, unit=unit, hover=hover) }}
+    </div>
+    <div class= "sliders-separated-container">
+      <div id="{{name}}-separated-container" style="display:none;">
+        {{ slider(name=name ~ "-x", min=min, max=max, step=step, default=default, unit=unit, hover=hover) }}
+        {{ slider(name=name ~ "-y", min=min, max=max, step=step, default=default, unit=unit, hover=hover) }}
+      </div>
+    </div
+  </div>
+{% endmacro %}
+

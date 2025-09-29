@@ -1,0 +1,18 @@
+{% macro dropdown(name, opts, default, hover) %}
+<div class="tooltip-container" id="{{ name }}-select-container">
+      {{ name|replace('-', ' ') }}
+      <select name="{{ name }}">
+      {% for opt in opts %}
+          <option
+            value="{{ opt }}"
+            {% if opt == default %}
+              selected="selected"
+            {% endif %}
+          >
+          {{ opt }}
+          </option>
+      {% endfor %}
+      </select>
+    <span class="tooltip-text">{{hover}}</span>
+    </div>
+{% endmacro %}

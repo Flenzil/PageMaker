@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+
+{% block upload %}
+
+  {% from  "macros/splittable_sliders.html" import splittable_slider with context%}
+  {% from  "macros/splittable_sliders.html" import slider_splitter with context%}
+  {% from  "macros/dropdown_menus.html" import dropdown with context%}
+  {% from  "macros/checkboxes.html" import checkbox with context%}
+  {% from  "macros/sliders.html" import slider with context%}
+
+  <h1>{% block title %} it is the page maker. {% endblock %}</h1>
+
+  <form method="post" action="/" enctype="multipart/form-data">
+    <div class="input-container checkbox-container">
+
+      {% for kwarg in page_kwargs.values() %}
+        {% if kwarg.type == 'checkbox' %}
+          {{ checkbox(kwarg.name, default=kwarg.default, hover=kwarg.hover) }}
+        {% endif %}
+      {% endfor %}
+      
+      {{ slider_splitter('spacing', 'Control x and y spacing separately') }}
+      {{ slider_splitter('bleed', 'Control x and y bleed separately') }}
+    </div>
+
+    <div class="input-container dropdown-container">
+
+      {% for kwarg in page_kwargs.values() %}
+        {% if kwarg.type == 'select' %}
+          {{ dropdown(kwarg.name, kwarg.opts, kwarg.default, kwarg.hover) }}
+        {% endif %}
+      {% endfor %}
+
+    </div>
+
+    <div class="input-container slider-container">
+
+      {{ splittable_slider('spacing', min=0, max=2, step=0.05, default=page_kwargs.spacing.default, unit='mm', hover=page_kwargs.spacing.hover) }}
+      {{ splittable_slider('bleed', min=0, max=5, step=0.005, default=page_kwargs.bleed.default, unit='mm', hover=page_kwargs.bleed.hover) }}
+
+      {{ slider('crop_mark_size', min=0, max=2, step=0.1, default=page_kwargs.crop_mark_size.default, unit='mm', hover=page_kwargs.crop_mark_size.hover)}}
+      {{ slider('brightness_adjust', min=0, max=2, step=0.1, default=page_kwargs.brightness_adjust.default, hover=page_kwargs.brightness_adjust.hover) }}
+
+    </div>
+
+    <div id="xml-upload-container">
+      <h2>UPLOAD DECK XML</h2>
+      <input class="form-control" type="file" name="uploaded_xml">
+    </div>
+
+    <div id="submit-button-container">
+      <button id="submit-button" class="btn-block">Submit</button>
+    </div>
+
+  </form>
+{% endblock %}

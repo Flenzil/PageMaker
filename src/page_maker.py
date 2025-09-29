@@ -66,7 +66,20 @@ async def fill_pages(cards: list[DoubleSidedCard], pages: list[Page], save_queue
         save_queue.put_nowait((pages[-1], str(current_page)))
 
 
-def save_pages_as_pdf(width: int, height: int) -> None:
+def sort_pages_numerically(page_name):
+    if str(page_name.stem).endswith('_back'):
+        return int(page_name.stem[:-5])
+    else:
+        return int(page_name.stem)
+
+def place_backs_at_end(page_name):
+    if str(page_name.stem).endswith('_back'):
+        return 1000
+    else:
+        return int(page_name.stem)
+
+
+def save_pages_as_pdf(width: int, height: int, collate: bool) -> None:
     '''
     Save pages from images found in PAGE_PATH into a single pdf named cards.pdf
 
@@ -75,8 +88,13 @@ def save_pages_as_pdf(width: int, height: int) -> None:
         height: height each in pdf in mm
     '''
     pdf = fpdf.FPDF(format=(width, height))
+    pages = params.PAGE_PATH.iterdir()
+    if collate:
+        pages = sorted(pages, key=sort_pages_numerically)
+    else:
+        pages = sorted(pages, key=place_backs_at_end)
 
-    for page in sorted(params.PAGE_PATH.iterdir()):
+    for page in pages:
         pdf.add_page()
         pdf.image(str(page), x=0, y=0, w=width, h=height)
         
@@ -168,7 +186,6 @@ def calculate_number_of_pages(cards: list[DoubleSidedCard], args: CLIArgs) -> tu
 async def create_pages(args: CLIArgs, cards: list[DoubleSidedCard]) -> None:
     '''Creates pages and asynchronously populates them with card images, then saves them as a jpg
     using a producer-consumer system. 
-    Optionally also then saves those images as a single .pdf.
 
     Args:
         args (ArgumentParser): Object containing command-line arguments.
@@ -193,14 +210,14 @@ async def create_pages(args: CLIArgs, cards: list[DoubleSidedCard]) -> None:
     # Kill workers
     await shut_down_workers(savers)
 
-    # Optionally save images as .pdf
-    if args.save_as_pdf:
-        page_width_in_mm = int(helpers.convert_pixels_to_mm(args.card_width, args.page_width))
-        page_height_in_mm = int(helpers.convert_pixels_to_mm(args.card_width, args.page_height))
-        save_pages_as_pdf(width=page_width_in_mm, height=page_height_in_mm)
-
 
 def page_maker(args: CLIArgs, cards: list[DoubleSidedCard]):
     '''Entry point for page_maker'''
     asyncio.run(create_pages(args, cards))
+    
+    # Optionally save images as .pdf
+    if args.save_as_pdf:
+        page_width_in_mm = int(helpers.convert_pixels_to_mm(args.card_width, args.page_width))
+        page_height_in_mm = int(helpers.convert_pixels_to_mm(args.card_width, args.page_height))
+        save_pages_as_pdf(width=page_width_in_mm, height=page_height_in_mm, collate=args.collate_back_pages)
 

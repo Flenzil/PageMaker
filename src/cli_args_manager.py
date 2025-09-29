@@ -28,30 +28,37 @@ class CLIArgsManager:
     downstream use.
     '''
     def __init__(self, argv):
-        self.cli_args = self.create_cli_args(argv)
+        self.argv = argv
+
+        if self.argv is None:
+            self.cli_args = self.create_cli_args().parse_args()
+        else:
+            self.cli_args = self.create_cli_args().parse_args(self.argv)
+
         self.validate_cli_args()
 
         self.card_width = params.card_widths[self.cli_args.quality]
 
-    def create_cli_args(self, argv=None) -> argparse.Namespace:
+    def create_cli_args(self) -> argparse.ArgumentParser:
         """Create and handle command-line arguments."""
         parser = argparse.ArgumentParser(description="Page Maker")
-        parser.add_argument("-q", "--quality", choices=["low", "medium", "high"], default="high", help='Card image quality')
+        parser.add_argument("-q", "--quality", choices=["low", "medium", "high"], default=params.quality_default, help='Card image quality')
         parser.add_argument("-s", "--spacing", type=float, default=params.spacing_default, help='Spacing between cards in mm')
         parser.add_argument("-sx", "--spacing-x", type=float, default=None, help='Horizontal spacing between cards in mm')
         parser.add_argument("-sy", "--spacing-y", type=float, default=None, help='Vertical spacing between cards in mm')
         parser.add_argument("-b", "--bleed", type=float, default=params.bleed_default, help='Desired amount of bleed around card images')
-        parser.add_argument("-bx", "--bleed_x", type=float, default=None, help='Desired amount of horizontal bleed around card images')
-        parser.add_argument("-by", "--bleed_y", type=float, default=None, help='Desired amount of veritcal bleed around card images')
-        parser.add_argument("-p", "--page-size", default=params.page_size_default, help='Page size e.g A4, B3, C2 etc.')
+        parser.add_argument("-bx", "--bleed-x", type=float, default=None, help='Desired amount of horizontal bleed around card images')
+        parser.add_argument("-by", "--bleed-y", type=float, default=None, help='Desired amount of veritcal bleed around card images')
+        parser.add_argument("-p", "--page-size", choices= params.page_size_choices, default=params.page_size_default, help='Page size e.g A4, B3, C2 etc.')
         parser.add_argument("--brightness-adjust", type=float, default=params.brightness_adjust_default, help='Optional brightness adjustment for pages')
-        parser.add_argument("--card-backs", action="store_true", default=params.card_backs_default, help='Use generic card back images')
-        parser.add_argument("--no-bleed", action="store_true", default=params.no_bleed_default, help='Crop bleed from every card image')
-        parser.add_argument("--always-bleed", action="store_true", default=params.always_bleed_default, help='Apply bleed to every card image')
+        parser.add_argument("--use-generic-card-backs", action="store_true", default=params.card_backs_default, help='Use generic card back images')
+        parser.add_argument("--always-use-bleed", action="store_true", default=params.always_bleed_default, help='Apply bleed to every card image')
+        parser.add_argument("--never-use-bleed", action="store_true", default=params.no_bleed_default, help='Crop bleed from every card image')
         parser.add_argument("--save-as-pdf", action="store_true", default=params.save_as_pdf_default, help='Additionally save pages as a single .pdf')
-        parser.add_argument("--crop_mark_size", type=float, default=params.crop_mark_size_default, help='Size of crop marks on cards with bleed')
+        parser.add_argument("--collate-back-pages", action="store_true", default=params.collate_back_pages_default, help='Place back pages after its corrosponding front page')
+        parser.add_argument("--crop-mark-size", type=float, default=params.crop_mark_size_default, help='Size of crop marks on cards with bleed')
 
-        return parser.parse_args(argv)
+        return parser
 
     def validate_cli_args(self):
         if not re.match(r"^[abc]{1}\d{1}$", self.cli_args.page_size.lower()):
@@ -64,7 +71,7 @@ class CLIArgsManager:
             print("Page size too small! Try a larger page.")
             sys.exit(1)
 
-        if self.cli_args.always_bleed and self.cli_args.no_bleed:
+        if self.cli_args.always_use_bleed and self.cli_args.never_use_bleed:
             print("--always-bleed and --no-bleed are mutually exclusive")
             sys.exit(1)
 
@@ -74,7 +81,7 @@ class CLIArgsManager:
             print("Bleed cannot be negative.")
             sys.exit(1)
 
-        if (self.cli_args.no_bleed and 
+        if (self.cli_args.never_use_bleed and 
             (self.cli_args.bleed != params.bleed_default or
             self.cli_args.bleed_x is not None or 
             self.cli_args.bleed_y is not None)):
@@ -82,7 +89,7 @@ class CLIArgsManager:
             print("WARNING: Bleed is specified but --no-bleed is set to True. Bleed value will be ignored.")
             print("#######################################################################################")
 
-        if self.cli_args.always_bleed and self.cli_args.bleed == 0:
+        if self.cli_args.always_use_bleed and self.cli_args.bleed == 0:
             print("#######################################################################################")
             print("--always-bleed is True but bleed is set to 0. Consider using --no_bleed")
             print("#######################################################################################")
@@ -110,7 +117,8 @@ class CLIArgsManager:
             page_height=self.get_page_height(),
             brightness_adjust=self.get_brightness_adjust(),
             use_generic_card_backs=self.get_use_generic_card_backs(),
-            save_as_pdf=self.get_save_as_pdf()
+            save_as_pdf=self.get_save_as_pdf(),
+            collate_back_pages=self.get_collate_back_pages()
         )
         return args
 
@@ -166,11 +174,11 @@ class CLIArgsManager:
 
     def get_no_bleed(self) -> bool:
         '''True if cards should have never have any bleed'''
-        return self.cli_args.no_bleed
+        return self.cli_args.never_use_bleed
 
     def get_always_bleed(self) -> bool:
         '''True if all cards should have bleed'''
-        return self.cli_args.always_bleed
+        return self.cli_args.always_use_bleed
 
     def get_card_crop_x(self) -> int:
         '''Amount of horizontal cropping needed in pixels'''
@@ -190,9 +198,13 @@ class CLIArgsManager:
 
     def get_use_generic_card_backs(self) -> bool:
         '''True if every card without a back already will use a generic image for the back side'''
-        return self.cli_args.card_backs
+        return self.cli_args.use_generic_card_backs
 
     def get_save_as_pdf(self) -> bool:
         '''True if the images should be aggregated into a single .pdf file'''
         return self.cli_args.save_as_pdf
+    
+    def get_collate_back_pages(self) -> bool:
+        '''True if the back pages should be placed after its corrosponding front page'''
+        return self.cli_args.collate_back_pages
 

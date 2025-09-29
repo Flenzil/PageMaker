@@ -27,15 +27,15 @@ Typical use case:
     - Print using standard or duplex printing, depending on back design
 '''
 
-def main(argv=None):
+def main(xml=None, argv=None):
     # Get command-line arguments
-    args = CLIArgsManager(argv).get_cli_args()
+    args = CLIArgsManager(argv=argv).get_cli_args()
 
     # Clear out old pages from PAGE_PATH
     helpers.clear_folder(params.PAGE_PATH)
 
     # Create double-sided card objects 
-    cards = create_cards(args)
+    cards = create_cards(args, xml=xml)
 
     # Create and save pages to PAGE_PATH
     page_maker(args, cards)

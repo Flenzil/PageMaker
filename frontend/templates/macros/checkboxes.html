@@ -1,0 +1,7 @@
+{% macro checkbox(name, default, hover) %}
+  <div id="{{ name }}-container" class="tooltip-container">
+    {{name|replace('-', ' ')}}
+    <input name={{ name }} type="checkbox" class="checkbox" id={{ name }} value="True" {% if default %} checked {% endif %}>
+    <span class="tooltip-text">{{hover}}</span>
+  </div>
+{% endmacro %}

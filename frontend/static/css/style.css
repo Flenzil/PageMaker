@@ -1,0 +1,182 @@
+:root {
+  --bg-colour: white;
+  --font-colour: black;
+  --seperated-sliders-bg-colour: rgb(220, 220, 240);
+  --button-colour: rgb(200,200,200);
+  --transition-time: 0.5s;
+  --drop-shadow: drop-shadow(3px 3px black);
+
+}
+
+html.dark-mode {
+  --bg-colour: rgb(50, 50, 50);
+  --font-colour:rgb(209, 209, 209);
+  --seperated-sliders-bg-colour: rgb(70, 70, 80);
+  --button-colour: rgb(40, 40, 40);
+}
+
+html * {
+  font-weight: 900 !important;
+  text-transform: uppercase !important;
+  font-family: "FreeMono", monospace; 
+}
+
+* {
+  transition: background-color var(--transition-time),
+              color var(--transition-time),
+              border-color var(--transition-time) !important;
+}
+
+body {
+  background-color: var(--bg-colour);
+  color: var(--font-colour);
+}
+
+h1, h2 {
+  text-align: center;
+}
+
+
+
+/* For disabled options */
+.muted {
+  opacity: 50%;
+}
+
+
+
+/* Custom tooltip box */
+.tooltip-container {
+  position:relative;
+}
+
+.tooltip-text {
+  visibility: hidden;
+  width: max-content;
+  background-color: black;
+  color: white;
+  text-align: center;
+  padding: 4px 8px;
+  border-radius: 4px;
+
+  position: absolute;
+  z-index: 10;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+
+  opacity: 0;
+  transition: opacity 0.1s;
+  pointer-events: none;
+}
+
+.tooltip-container:hover .tooltip-text {
+  visibility: visible;
+  opacity: 1;
+}
+
+
+
+/* Dark mode button */
+.dark-mode-container {
+  display: flex;
+  justify-content: flex-end;
+  align-items: middle;
+  padding: 5px;
+}
+
+.form-check.form-switch {
+  margin-left: auto;
+}
+
+.form-switch .form-check-input {
+  filter: var(--drop-shadow);
+  width: 3em;
+  height: 1.5em;
+}
+
+.form-switch .form-check-label {
+  margin-left: 0.75rem;
+  font-size: 20px;
+  transform: translateY(2px);
+}
+
+
+
+.input-container {
+  display:flex;
+  border: 3px dashed var(--font-colour);
+  width: 50%;
+  padding: 5px;
+  margin-bottom: 5px;
+  flex-direction: column;
+}
+
+.input-container select {
+  margin:3px;
+}
+
+.checkbox-label {
+  display: inline;
+}
+
+.checkbox {
+  filter: var(--drop-shadow);
+}
+
+select {
+  filter: var(--drop-shadow);
+}
+
+.slider-container input[type="range"] {
+  vertical-align: middle;
+  transform: translateY(-1px);
+  width: 49%;
+  filter: var(--drop-shadow);
+}
+
+.sliders-separated-container {
+  background-color: var(--seperated-sliders-bg-colour);
+  border-radius: 5px;
+  margin-bottom: 5px;
+}
+
+.slider-label {
+  width: 9ch;
+}
+
+.slider-display {
+  text-transform: lowercase !important;
+  vertical-align: center;
+  align:middle;
+}
+
+input[type="file"]::file-selector-button {
+  display: none;
+}
+
+.form-control {
+  text-align: center;
+  border: 3px dashed var(--font-colour);
+  display: inline;
+  padding: 5px;
+  margin-bottom: 5px;
+  background-color: var(--button-colour);
+  color: var(--font-colour);
+}
+
+#submit-button-container {
+  text-align: center;
+  margin: 5px;
+}
+
+#submit-button {
+  border-radius: 12px;
+  font-size: 20px;
+  width: 100%;
+  background-color: var(--button-colour);
+  color: var(--font-colour);
+  filter: var(--drop-shadow);
+}
+
+

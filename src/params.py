@@ -12,6 +12,8 @@ card_width_high = 3000
 card_width_medium = int(card_width_high / 2)
 card_width_low = int(card_width_high / 4)
 
+quality_default = 'high'
+
 card_widths = {
     "low": card_width_low,
     "medium": card_width_medium,
@@ -34,6 +36,8 @@ mpcfill_bleed = 3.175 # MPCFill images have a 1/8" = 3.175mm bleed on all sides.
 MAX_PAGE_SIZE_NUMBER = 7
 MIN_PAGE_SIZE_NUMBER = 0
 page_size_default = "a4"
+page_size_choices = [f'{letter}{number}' for letter in ['a','b','c'] for number in range(MIN_PAGE_SIZE_NUMBER, MAX_PAGE_SIZE_NUMBER)]
+
 
 # Factor by which images are brightened
 brightness_adjust_default = 1.0
@@ -52,6 +56,7 @@ always_bleed_default = False
 
 # Aggregate images into a single pdf
 save_as_pdf_default = False
+collate_back_pages_default = False
 
 # Dimension Ratios
 card_ratio = 1.3968

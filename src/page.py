@@ -307,8 +307,6 @@ class Page():
             self.is_full = True
 
 
-
-
     def save_page(self, filename: Path) -> None:
         ''' Save page to disk and then clear the image data to save memory'''
         if self.page is not None:
