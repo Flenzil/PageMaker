@@ -16,12 +16,20 @@ async-timeout==5.0.1
     # via aiohttp
 attrs==25.3.0
     # via aiohttp
+defusedxml==0.7.1
+    # via fpdf2
+fonttools==4.60.1
+    # via fpdf2
+fpdf2==2.8.4
+    # via -r requirements.in
 frozenlist==1.7.0
     # via
     #   aiohttp
     #   aiosignal
 idna==3.10
     # via yarl
+livereload==2.7.1
+    # via -r requirements.in
 markdown-it-py==3.0.0
     # via rich
 mdurl==0.1.2
@@ -30,6 +38,8 @@ multidict==6.6.3
     # via
     #   aiohttp
     #   yarl
+pillow==11.3.0
+    # via fpdf2
 pillow-simd==9.5.0.post2
     # via -r requirements.in
 prompt-toolkit==3.0.51
@@ -44,6 +54,8 @@ questionary==2.1.0
     # via -r requirements.in
 rich==14.0.0
     # via -r requirements.in
+tornado==6.5.2
+    # via livereload
 typing-extensions==4.14.1
     # via
     #   aiosignal

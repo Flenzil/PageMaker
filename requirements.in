@@ -3,3 +3,5 @@ aiohttp
 aiofiles
 rich
 questionary
+fpdf2
+livereload
