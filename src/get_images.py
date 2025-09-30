@@ -244,8 +244,6 @@ async def download_image(session: aiohttp.ClientSession, card: Card, progress: P
     for attempt in range(params.MAX_DOWNLOAD_RETRIES):
         async with session.get(url, cookies=cookies, headers=headers) as response:
             try:
-                if card.name == 'Assert Authority':
-                    raise exceptions.QuotaExceededException()
 
                 card_data = await handle_response(response, progress, task_id)
                 return card_data
