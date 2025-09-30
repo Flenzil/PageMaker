@@ -58,6 +58,12 @@ class CLIArgsManager:
         parser.add_argument("--collate-back-pages", action="store_true", default=params.collate_back_pages_default, help='Place back pages after its corrosponding front page')
         parser.add_argument("--crop-mark-size", type=float, default=params.crop_mark_size_default, help='Size of crop marks on cards with bleed')
 
+        # Set values for frontend sliders
+        parser.set_defaults(spacing_min=0, spacing_max=2, spacing_step=0.1, spacing_unit='mm',
+                            bleed_min=0, bleed_max=5, bleed_step=0.005, bleed_unit='mm',
+                            brightness_adjust_min=0, brightness_adjust_max=2, brightness_adjust_step=0.05, brightness_adjust_unit='',
+                            crop_mark_size_min=0, crop_mark_size_max=2, crop_mark_size_step=0.05, crop_mark_size_unit='mm',
+                            )
         return parser
 
     def validate_cli_args(self):

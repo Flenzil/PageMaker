@@ -19,9 +19,13 @@
           {{ checkbox(kwarg.name, default=kwarg.default, hover=kwarg.hover) }}
         {% endif %}
       {% endfor %}
-      
-      {{ slider_splitter('spacing', 'Control x and y spacing separately') }}
-      {{ slider_splitter('bleed', 'Control x and y bleed separately') }}
+
+      {% for kwarg in page_kwargs.values() %}
+        {% if 'split' in kwarg.type %}
+          {{ slider_splitter(kwarg.name, "Control x and y " + kwarg.name + " separately") }}
+        {% endif %}
+      {% endfor %}
+
     </div>
 
     <div class="input-container dropdown-container">
@@ -36,11 +40,19 @@
 
     <div class="input-container slider-container">
 
-      {{ splittable_slider('spacing', min=0, max=2, step=0.05, default=page_kwargs.spacing.default, unit='mm', hover=page_kwargs.spacing.hover) }}
-      {{ splittable_slider('bleed', min=0, max=5, step=0.005, default=page_kwargs.bleed.default, unit='mm', hover=page_kwargs.bleed.hover) }}
-
-      {{ slider('crop_mark_size', min=0, max=2, step=0.1, default=page_kwargs.crop_mark_size.default, unit='mm', hover=page_kwargs.crop_mark_size.hover)}}
-      {{ slider('brightness_adjust', min=0, max=2, step=0.1, default=page_kwargs.brightness_adjust.default, hover=page_kwargs.brightness_adjust.hover) }}
+      {% for kwarg in page_kwargs.values() %}
+        {% if 'range' in kwarg.type %}
+          {{ splittable_slider(
+            name=kwarg.name,
+            min=kwarg.min,
+            max=kwarg.max,
+            step=kwarg.step,
+            default=kwarg.default,
+            unit=kwarg.unit,
+            hover=kwarg.hover
+          ) }}
+        {% endif %}
+      {% endfor %}
 
     </div>
 

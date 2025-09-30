@@ -14,6 +14,7 @@ def get_args_from_parser(parser: argparse.ArgumentParser) -> dict[str, dict[str,
 
     spec = {}
 
+    arg_names = [action.dest for action in parser._actions]
     for action in parser._actions:
         if action.dest == 'help':
             continue
@@ -32,10 +33,18 @@ def get_args_from_parser(parser: argparse.ArgumentParser) -> dict[str, dict[str,
             field['type'] = 'checkbox'
 
         else:
-            if action.default is not None and action.dest != 'spacing' and action.dest != 'bleed':
+            if not action.dest.endswith('_x') and not action.dest.endswith('_y'):
                 field['type'] = 'range'
+                field['min'] = parser.get_default(f'{action.dest}_min')
+                field['max'] = parser.get_default(f'{action.dest}_max')
+                field['step'] = parser.get_default(f'{action.dest}_step')
+                field['unit'] = parser.get_default(f'{action.dest}_unit')
+
+        if f'{action.dest}_x' in arg_names and f'{action.dest}_y' in arg_names:
+            field['type'] += ' split' 
 
         spec[action.dest] = field
+
     return spec
 
 
