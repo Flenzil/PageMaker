@@ -5,7 +5,7 @@
 {% from  "macros/sliders.html" import slider with context%}
 
 
-<form method="post" action="/" enctype="multipart/form-data">
+<form method="post" id="input-form" action="/" enctype="multipart/form-data">
   <div class="input-container checkbox-container">
 
     {% for kwarg in page_kwargs.values() %}
