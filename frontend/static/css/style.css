@@ -3,6 +3,8 @@
   --font-colour: black;
   --seperated-sliders-bg-colour: rgb(220, 220, 240);
   --button-colour: rgb(200,200,200);
+  --checkbox-colour: rgb(130, 130, 130);
+  --accent-color: rgb(60, 250, 225);
   --transition-time: 0.5s;
   --drop-shadow: drop-shadow(3px 3px black);
 }
@@ -12,15 +14,14 @@ html.dark-mode {
   --font-colour:rgb(209, 209, 209);
   --seperated-sliders-bg-colour: rgb(70, 70, 80);
   --button-colour: rgb(40, 40, 40);
+  --checkbox-colour: rgb(255, 255, 255);
+  --accent-color: rgb(60, 250, 225);
 }
 
 html * {
   font-weight: 900 !important;
   text-transform: uppercase !important;
   font-family: "FreeMono", monospace; 
-}
-
-* {
   transition: background-color var(--transition-time),
               color var(--transition-time),
               border-color var(--transition-time) !important;
@@ -33,6 +34,23 @@ body {
 
 h1, h2 {
   text-align: center;
+}
+
+input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    appearance: none; /* Removes default styles */
+    background-color: var(--checkbox-colour); /* Default background */
+    border: 2px solid black;
+    cursor: pointer;
+}
+
+input[type="checkbox"]:checked {
+  background-color: var(--accent-color);
+}
+
+input[type="range"] {
+  accent-color: var(--accent-color);
 }
 
 
@@ -52,7 +70,7 @@ h1, h2 {
 .tooltip-text {
   visibility: hidden;
   width: max-content;
-  background-color: black;
+  background-color: rgb(80,80,80);
   color: white;
   text-align: center;
   padding: 4px 8px;
@@ -65,23 +83,24 @@ h1, h2 {
   transform: translateX(-50%);
 
   opacity: 0;
-  transition: opacity 0.1s;
   pointer-events: none;
 }
 
 .tooltip-container:hover .tooltip-text {
   visibility: visible;
   opacity: 1;
+  filter: var(--drop-shadow);
 }
 
 
 
 /* Dark mode button */
-.dark-mode-container {
+#dark-mode-container {
   display: flex;
   justify-content: flex-end;
   align-items: middle;
   padding: 5px;
+  margin-right: 5%;
 }
 
 .form-check.form-switch {
@@ -92,6 +111,7 @@ h1, h2 {
   filter: var(--drop-shadow);
   width: 3em;
   height: 1.5em;
+  background-color: var(--button-colour);
 }
 
 .form-switch .form-check-label {
@@ -105,7 +125,6 @@ h1, h2 {
 .input-container {
   display:flex;
   border: 3px dashed var(--font-colour);
-  width: 50%;
   padding: 5px;
   margin-bottom: 5px;
   flex-direction: column;
@@ -147,7 +166,7 @@ select {
 .slider-display {
   text-transform: lowercase !important;
   vertical-align: center;
-  align:middle;
+  align-items:middle;
 }
 
 input[type="file"]::file-selector-button {
@@ -164,6 +183,11 @@ input[type="file"]::file-selector-button {
   color: var(--font-colour);
 }
 
+#submit {
+  margin-left: 5%;
+  margin-right: 5%;
+}
+
 #submit-button-container {
   text-align: center;
   margin: 5px;
@@ -176,6 +200,7 @@ input[type="file"]::file-selector-button {
   background-color: var(--button-colour);
   color: var(--font-colour);
   filter: var(--drop-shadow);
+  border-color: var(--accent-color);
 }
 
 

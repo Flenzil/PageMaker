@@ -100,7 +100,7 @@ def index():
             mimetype='application/zip'
         )
     
-    return render_template('index.html', page_kwargs=page_kwargs)
+    return render_template('base.html', page_kwargs=page_kwargs)
 
 
 if __name__ == "__main__":
