@@ -7,6 +7,7 @@
   --accent-color: rgb(60, 250, 225);
   --transition-time: 0.5s;
   --drop-shadow: drop-shadow(3px 3px black);
+  --border: 3px dashed var(--font-colour);
 }
 
 html.dark-mode {
@@ -136,7 +137,7 @@ input[type="range"] {
 
 .input-container {
   display:flex;
-  border: 3px dashed var(--font-colour);
+  border: var(--border);
   padding: 5px;
   margin-bottom: 5px;
   flex-direction: column;
@@ -187,7 +188,7 @@ input[type="file"]::file-selector-button {
 
 .form-control {
   text-align: center;
-  border: 3px dashed var(--font-colour);
+  border: var(--border);
   display: inline;
   padding: 5px;
   margin-bottom: 5px;
@@ -201,7 +202,7 @@ input[type="file"]::file-selector-button {
 }
 
 #preview-box{
-  border: 3px dashed var(--font-colour);
+  border: var(--border);
 }
 
 
