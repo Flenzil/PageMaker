@@ -1,13 +1,15 @@
 function drawCards() {
 
-  const canvas = document.getElementById("preview");
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const grid = document.getElementById("preview");
+  grid.innerHTML = "";
 
-  const pageWidth = +canvas.getBoundingClientRect().width;
-  const pageHeight = +canvas.getBoundingClientRect().height;
+  const page = document.getElementById("preview");
+  
+  const pageWidth = +page.clientWidth;
+  const pageHeight = +page.clientHeight;
+   
 
-  const PixelsPerMm = pageWidth / 210;
+  const PixelsPerMm = pageHeight / 297;
   const MmPerPixel = 210 / pageWidth;
 
   const spacing = +document.getElementById("spacing-slider").value * PixelsPerMm;
@@ -22,64 +24,50 @@ function drawCards() {
   const totalWidth = 3 * cardWidthWithBleed + 2 * spacing;
   const totalHeight = 3 * cardHeightWithBleed + 2 * spacing;
 
-  const marginXBleed = (pageWidth - totalWidth) / 2 + bleed /2;
-  const marginYBleed = (pageHeight - totalHeight) / 2 + bleed / 2;
+  const marginXBleed = (pageWidth - totalWidth) / 2;
+  const marginYBleed = (pageHeight - totalHeight) / 2;
 
-  const marginX = marginXBleed + bleed;
-  const marginY = marginYBleed + bleed;
-
-  console.log(pageWidth);
-
-  ctx.beginPath();
 
   for (let i = 0; i < 3; i++){
     for (let j = 0; j < 3; j++){
-      ctx.rect(
-        marginXBleed + i * (cardWidthWithBleed + spacing),
-        marginYBleed + j * (cardHeightWithBleed + spacing),
-        cardWidthWithBleed,
-        cardHeightWithBleed
-      );
-      ctx.rect(
-        marginX + i * (cardWidthWithBleed + spacing),
-        marginY + j * (cardHeightWithBleed + spacing),
-        cardWidth,
-        cardHeight
-      );
+      const x = marginXBleed + i * (cardWidthWithBleed + spacing);
+      const y = marginYBleed + j * (cardHeightWithBleed + spacing);
+
+      const cardContainer = document.createElement("div");
+      cardContainer.className = "card-container";
+      cardContainer.style.left = x + "px";
+      cardContainer.style.top = y + "px";
+      cardContainer.style.width = cardWidthWithBleed + "px";
+      cardContainer.style.height = cardHeightWithBleed + "px";
+
+      const bleedDiv = document.createElement("div");
+      bleedDiv.className = "card-bleed";
+      bleedDiv.style.width = cardWidthWithBleed + "px";
+      bleedDiv.style.height = cardHeightWithBleed + "px";
+
+      const cardDiv = document.createElement("div");
+      cardDiv.className = "card";
+      cardDiv.img
+      cardDiv.style.width = cardWidth + "px";
+      cardDiv.style.height = cardHeight + "px";
+      cardDiv.style.margin = bleed + "px";
+
+      const cardImg = document.createElement("img");
+      cardImg.src = 'static/vma-4-black-lotus.png';
+      cardImg.className = "card-image";
+
+
+      cardDiv.appendChild(cardImg);
+      bleedDiv.appendChild(cardDiv);
+      cardContainer.appendChild(bleedDiv);
+      grid.appendChild(cardContainer);
+  
     }
   }
-  ctx.stroke();
 }
 
 
-function resizeCanvas() {
-  const canvas = document.querySelector("#preview");
-  const rect = canvas.getBoundingClientRect();
-  const dpr = window.devicePixelRatio || 1;
-
-  const width = Math.min(canvas.clientWidth, window.innerWidth);
-  const height = Math.min(canvas.clientHeight, window.innerHeight);
-
-  canvas.style.width = width + "px";
-  canvas.style.height = height + "px";
-
-  // Set the canvas pixel size to match its CSS size * devicePixelRatio
-  canvas.width = rect.width * dpr;
-  canvas.height = rect.height * dpr;
-
-  const ctx = canvas.getContext("2d");
-  ctx.resetTransform && ctx.resetTransform();
-  ctx.scale(dpr, dpr);  // scale drawings so 1 unit = 1 CSS pixel
-
-  drawCards();
-}
-
-// Call once at load and again if the window resizes
-document.addEventListener("DOMContentLoaded", () => {
-  resizeCanvas();
-});
-
-window.addEventListener("resize", resizeCanvas);
-
+window.addEventListener("resize", drawCards);
 document.getElementById("spacing-slider").addEventListener("input", drawCards);
 document.getElementById("bleed-slider").addEventListener("input", drawCards);
+document.addEventListener("DOMContentLoaded", drawCards);
