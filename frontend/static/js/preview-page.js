@@ -13,8 +13,8 @@ function drawCards() {
   const MmPerPixel = 210 / pageWidth;
 
   const spacing = +document.getElementById("spacing-slider").value * PixelsPerMm;
-  let bleed = +document.getElementById("bleed-slider").value * PixelsPerMm;
   const neverUseBleed = document.getElementById("never-use-bleed");
+  let bleed = +document.getElementById("bleed-slider").value * PixelsPerMm;
 
 
   if (neverUseBleed.checked){
@@ -27,15 +27,18 @@ function drawCards() {
   const cardWidthWithBleed = cardWidth + 2 * bleed;
   const cardHeightWithBleed = cardHeight + 2 * bleed;
 
-  const totalWidth = 3 * cardWidthWithBleed + 2 * spacing;
-  const totalHeight = 3 * cardHeightWithBleed + 2 * spacing;
+  const cols = Math.floor(pageWidth / (cardWidthWithBleed + spacing));
+  const rows = Math.floor(pageHeight / (cardHeightWithBleed + spacing));
+
+  const totalWidth = cols * cardWidthWithBleed + (cols - 1) * spacing;
+  const totalHeight = rows * cardHeightWithBleed + (rows - 1) * spacing;
 
   const marginXBleed = (pageWidth - totalWidth) / 2;
   const marginYBleed = (pageHeight - totalHeight) / 2;
 
 
-  for (let i = 0; i < 3; i++){
-    for (let j = 0; j < 3; j++){
+  for (let i = 0; i < cols; i++){
+    for (let j = 0; j < rows; j++){
       const x = marginXBleed + i * (cardWidthWithBleed + spacing);
       const y = marginYBleed + j * (cardHeightWithBleed + spacing);
 
