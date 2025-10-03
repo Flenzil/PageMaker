@@ -13,7 +13,13 @@ function drawCards() {
   const MmPerPixel = 210 / pageWidth;
 
   const spacing = +document.getElementById("spacing-slider").value * PixelsPerMm;
-  const bleed = +document.getElementById("bleed-slider").value * PixelsPerMm;
+  let bleed = +document.getElementById("bleed-slider").value * PixelsPerMm;
+  const neverUseBleed = document.getElementById("never-use-bleed");
+
+
+  if (neverUseBleed.checked){
+    bleed = 0;
+  }
 
   const cardWidth = 63 * PixelsPerMm;
   const cardHeight = 89 * PixelsPerMm;
@@ -70,4 +76,5 @@ function drawCards() {
 window.addEventListener("resize", drawCards);
 document.getElementById("spacing-slider").addEventListener("input", drawCards);
 document.getElementById("bleed-slider").addEventListener("input", drawCards);
+document.getElementById("never-use-bleed").addEventListener("change", drawCards);
 document.addEventListener("DOMContentLoaded", drawCards);
