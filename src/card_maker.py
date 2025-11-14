@@ -61,8 +61,9 @@ def add_image_to_page_prompt(extra_images: list[str], cards: list[Card]) -> dict
                     choices.append(card_name)
 
             for other_image in extra_images:
-                if other_image not in image_pairs and other_image not in image_pairs.values() and other_image != image:
-                    choices.append(other_image)
+                if other_image not in image_pairs.values() and other_image != image:
+                    if image_pairs.get(other_image, '') == '':
+                        choices.append(other_image)
 
             front_image = questionary.select(f'Which card would you like to add {image} to the back of?',
                     choices=sorted(choices)).ask()
@@ -98,6 +99,7 @@ def add_extra_images(cards: list[Card]) -> tuple[list[Card], list[Card]]:
     x_count = 1
 
     for front, back in image_pairs.items():
+        # Cards with no backs
         if back == '':
             name = str(front)
             id = 'x' * x_count
@@ -113,7 +115,8 @@ def add_extra_images(cards: list[Card]) -> tuple[list[Card], list[Card]]:
             card = CardParser(card_xml).extract_card()
             extra_cards.append(card)
 
-        elif isinstance(front, str):
+        elif isinstance(front, str) and '.' not in front and '.' not in back:
+            # Cards with MPCFill front and custom back
             name = str(back)
             id = 'x' * x_count
             slots = ",".join(next(card.slots for card in cards if card.id == front))
@@ -128,9 +131,13 @@ def add_extra_images(cards: list[Card]) -> tuple[list[Card], list[Card]]:
             extra_backs.append(card)
 
         else:
+            # Cards with custom front and back
             name = str(front)
             id = 'x' * x_count
             slots = str(slot_number)
+
+            x_count += 1
+
             name_back = str(back)
             id_back = 'x' * x_count
 
